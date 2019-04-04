@@ -1,1 +1,1 @@
-Script for generating figures and tables
+Scripts for generating figures and tables
