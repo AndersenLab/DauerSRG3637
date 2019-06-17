@@ -27,3 +27,5 @@ File S13 contains raw data for Fig. S4.
 File S14 contains raw data for Fig. S16.
 
 File S15 contains raw data for Fig. S15.
+
+File S16 contains raw data for Fig. S9.
