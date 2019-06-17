@@ -16,9 +16,14 @@ File S8 contains raw data for Fig. 3c.
 
 File S9 contains raw data for Fig. 3e. 
 
-File S10 contains raw data for Fig. S5. 
+File S10 contains raw data for Fig. S6. 
 
-File S11 contains raw data for Fig. S6. 
+File S11 contains raw data for Fig. S7. 
 
 File S12 contains raw data for Fig. 4d.
 
+File S13 contains raw data for Fig. S4.
+
+File S14 contains raw data for Fig. S16.
+
+File S15 contains raw data for Fig. S15.
