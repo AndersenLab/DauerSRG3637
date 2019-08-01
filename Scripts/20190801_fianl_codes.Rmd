@@ -1,0 +1,1608 @@
+---
+title: "20190801_final_codes"
+author: "Daehan Lee"
+date: "08/01/2019"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, warning=FALSE, message =FALSE}
+
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(cowplot)
+library(ggtree) 
+library(cegwas)
+library(PopGenome)
+library(genetics)
+library(repmis)
+library(ggthemes)
+library(ggrepel)
+library(ape)
+library(sommer)
+library(ggsn)
+
+#### source_data
+
+source_data("https://github.com/AndersenLab/DauerSRG3637/blob/master/Data/plot_pipeline.Rda?raw=TRUE")  ## Fig 1A - High-throughput dauer assay (HTDA)
+source_data("https://github.com/AndersenLab/DauerSRG3637/blob/master/Data/df_model_srg3637.Rda?raw=TRUE") ## Fig 3A, Fig S4 - Gene model of srg-36 and srg-37
+source_data("https://github.com/AndersenLab/DauerSRG3637/blob/master/Data/df_haplotype.Rda?raw=TRUE")  ## Fig 4C, Fig S8-10 - haplotype data
+source_data("https://github.com/AndersenLab/DauerSRG3637/blob/master/Data/FileS1_HTDA_validation.Rda?raw=TRUE")
+source_data("https://github.com/AndersenLab/DauerSRG3637/blob/master/Data/FileS2_dose_assay.Rda?raw=TRUE")
+source_data("https://github.com/AndersenLab/DauerSRG3637/blob/master/Data/FileS3_HTDA_wild_strains.Rda?raw=TRUE")
+source_data("https://github.com/AndersenLab/DauerSRG3637/blob/master/Data/FileS4_GWA_mapping.Rda?raw=TRUE")
+source_data("https://github.com/AndersenLab/DauerSRG3637/blob/master/Data/FileS5_CeNDR_249isotypes.Rda?raw=TRUE")
+source_data("https://github.com/AndersenLab/DauerSRG3637/blob/master/Data/FileS6_genotype_matrix_157.Rda?raw=TRUE")
+source_data("https://github.com/AndersenLab/DauerSRG3637/blob/master/Data/FileS7_srg3637_genotype.Rda?raw=TRUE")
+source_data("https://github.com/AndersenLab/DauerSRG3637/blob/master/Data/FileS8_srg37_reaction_norm.Rda?raw=TRUE")
+source_data("https://github.com/AndersenLab/DauerSRG3637/blob/master/Data/FileS9_srg3637_lf.Rda?raw=TRUE")
+source_data("https://github.com/AndersenLab/DauerSRG3637/blob/master/Data/FileS10_PB303_dose.Rda?raw=TRUE")
+source_data("https://github.com/AndersenLab/DauerSRG3637/blob/master/Data/FileS11_srg37_lf.Rda?raw=TRUE")
+source_data("https://github.com/AndersenLab/DauerSRG3637/blob/master/Data/FileS12_tree.Rda?raw=TRUE")
+source_data("https://github.com/AndersenLab/DauerSRG3637/blob/master/Data/FileS13_fine_mapping.Rda?raw=TRUE")
+source_data("https://github.com/AndersenLab/DauerSRG3637/blob/master/Data/FileS14_Pi_comparison.Rda?raw=TRUE")
+source_data("https://github.com/AndersenLab/DauerSRG3637/blob/master/Data/FileS15_Fst.Rda?raw=TRUE")
+source_data("https://github.com/AndersenLab/DauerSRG3637/blob/master/Data/FileS16_srg3637_expression.Rda?raw=TRUE")
+
+################## Main fiugres #################
+
+######### Figure 1 #########
+
+ ## Fig 1B - EMCluster example
+
+plot_cluster_example <- df_plot %>%
+  ggplot(.) +
+  aes(x = TOF, 
+      y = green, 
+      scale = T, color = class) +
+  scale_colour_manual(values =c("deepskyblue4", "darkorange1")) +
+  geom_point(size=1, alpha = 0.3)+
+  theme_bw() +
+  theme(text = element_text(size=11, color = "black"), axis.title = element_text(size=13, color = "black"), axis.text = element_text(size=11, color = "black"), legend.position = 'none', strip.text = element_text(size=9, color = "black")) +
+  ylim(0,300) +
+  xlim(0,600) +
+  facet_grid(strain~condition) +
+  labs(x="Animal length", y="Bead fluorescence")
+
+   ### false positive and false negative ratio
+
+false_positive = nrow(dplyr::filter(df_plot, strain == "Wild-type" & condition == "No pheromone" & class == "Dauer")) / nrow(dplyr::filter(df_plot, strain == "Wild-type" & condition == "No pheromone"))
+false_negative= nrow(dplyr::filter(df_plot, strain == "Daf-c mutant" & class == "Non-dauer")) / nrow(dplyr::filter(df_plot, strain == "Daf-c mutant"))
+print(false_positive)
+print(false_negative)
+
+## Fig 1C - dauer quantification
+
+plot_daf2_rn <- df_plot2 %>%
+  ggplot(.) +
+  aes(x = strain, 
+      y = dauer_fraction, 
+      fill=condition, labs=strain) +
+  geom_point(aes(fill=condition), position=position_jitterdodge(), alpha = .7, size = 0.7) +
+  geom_boxplot(outlier.alpha = 0, alpha = 0.7)+ 
+  scale_y_continuous(breaks=c(0, 0.2, 0.4, 0.6, 0.8, 1.0))+
+  scale_fill_brewer(palette = "Set1") +
+  theme_bw() +
+  theme(axis.title.y = element_text(size=13, color = "black"), axis.text = element_text(size=11, color = "black")) +
+  labs(x= "strain", y="Dauer fraction") +
+  theme(axis.title.x = element_blank(), legend.position = 'none') 
+
+## Fig 1D - ascr#5 dose response (reaction norm)
+
+plot_ascr5_dose <- df_dose25C_dauer %>%
+  dplyr::filter(condition == "ascr5") %>%
+  ggplot(.) +
+  aes(x = concentration, 
+      y = dauer_fraction, 
+      fill=strain, labs=strain) +
+  geom_point(aes(fill=strain), position=position_jitterdodge(jitter.width = 0.1), alpha = .7, size = 0.6) +
+  geom_boxplot(outlier.alpha = 0, alpha = 0.7)+
+  scale_fill_manual(values = c("gold2", "plum4", "darkorange1", "lightskyblue2")) +
+  scale_y_continuous(breaks=c(0, 0.2, 0.4, 0.6, 0.8, 1.0))+
+  theme_bw() +
+  theme(text = element_text(size=11, color = "black"), axis.title = element_text(size=13, color = "black"), axis.text = element_text(size=11, color = "black"), legend.title = element_text(size=11, color = "black"), legend.text = element_text(size=10, color = "black")) +
+  labs(x="Concentration of ascr#5 (nM)", y="Dauer fraction", fill = "Strain")
+
+## Fig1
+
+Fig1A <- cowplot::plot_grid(plot_pipeline, labels ="a", label_size = 15)
+
+Fig1D <- cowplot::plot_grid(plot_ascr5_dose, labels ="d", label_size = 15)
+Fig1BC <- cowplot::plot_grid(plot_cluster_example, plot_daf2_rn, nrow=1, labels = c("b", "c"), rel_widths = c(1,0.6), align = "h", label_size = 15)
+Fig1BCD <- cowplot::plot_grid(Fig1BC, Fig1D, nrow=2, rel_widths = c(1,1), align = "v")
+
+Fig1 <- cowplot::plot_grid(Fig1A, Fig1BCD, nrow=1, rel_widths = c(0.5, 1), align = "h", label_size = 15)
+
+ggsave("~/Dropbox/AndersenLab/LabFolders/Daehan/Manuscripts/srg/Revision/figures/Fig1.png", plot = Fig1, width = 7.5, height = 5, units = "in")
+
+####### Figure 2 ########
+
+## assay regrssion
+
+resid_GWA_assay <- GWA_dauer %>%
+  dplyr::group_by(round, condition) %>%
+  dplyr::mutate(resid_assay = residuals(lm(dauer_fraction ~ assay))) %>%
+  dplyr::ungroup() %>%
+  dplyr::group_by(condition, strain) %>%
+  dplyr::mutate(resid_mean = mean(resid_assay)) %>%
+  dplyr::ungroup()
+
+## ANOVA test for 157 strains
+
+print(log10(anova(lm(resid_GWA_assay$resid_assay ~ resid_GWA_assay$strain))$"Pr(>F)"[1]))
+
+## Broad sense heritability
+
+df_H2 <- resid_GWA_assay %>%
+  dplyr::group_by(strain) %>%
+  dplyr::mutate(n=n()) %>%
+  dplyr::ungroup() %>%
+  dplyr::filter(n>=3)
+
+length(unique(df_H2$strain))
+
+df_GWA_pheno_a5 <- df_H2
+pheno <- as.data.frame(dplyr::select(df_GWA_pheno_a5, resid_assay))[,1]
+strain <- as.factor(df_GWA_pheno_a5$strain)
+reffMod <- lme4::lmer(pheno ~ 1 + (1|strain))
+Variances <- as.data.frame(lme4::VarCorr(reffMod, comp = "Variance"))
+Vg <- Variances$vcov[1]
+Ve <- Variances$vcov[2]
+H2 <- Vg/(Vg+Ve)
+print(H2) ## 0.836
+
+## Narrow sense heritability by sommer package
+
+########################################################################################################################
+# PROCESS GWA MAPPING PHENOTYPES - GENOMIC HERITABILITY - START
+########################################################################################################################
+
+geno_matrix <- gm
+
+strains <- process_mapping %>%
+  dplyr::distinct(strain, value) %>%
+  na.omit %>%
+  dplyr::arrange(strain) %>%
+  dplyr::pull(strain)
+
+strains <- as.character(strains)
+
+df_y <- process_mapping %>%
+  dplyr::distinct(strain, value) %>%
+  na.omit %>%
+  dplyr::arrange(strain) %>%
+  dplyr::mutate(strain1=strain, strain2=strain)
+
+A <- sommer::A.mat(t(geno_matrix[,colnames(geno_matrix) %in% strains]))
+E <- sommer::E.mat(t(geno_matrix[,colnames(geno_matrix) %in% strains]))
+
+df_H2 <- sommer::mmer(value~1, random=~vs(strain1,Gu=A)+vs(strain2,Gu=E), data=df_y)
+  
+(summary(df_H2)$varcomp)
+
+pin(df_H2, H2 ~ (V1) / (V1+V2+V3))
+pin(df_H2, H2 ~ (V1+V2) / (V1+V2+V3))
+
+ ## Fig 2A - Phenotypic distrubtion plot
+
+plot_pheno_dist <- resid_GWA_assay %>%
+  dplyr::group_by(strain) %>%
+  dplyr::summarise(resid_assay_mean = mean(resid_assay)) %>%
+  dplyr::ungroup() %>%
+  dplyr::mutate(resid_assay_min = min(resid_assay_mean), resid_assay_max = max(resid_assay_mean)) %>%
+  dplyr::group_by(strain) %>%
+  dplyr::summarise(norm_dauer = (resid_assay_mean - resid_assay_min)/(resid_assay_max-resid_assay_min)) %>% ## to scale from 0 to 1
+  dplyr::ungroup() %>%
+  ggplot(.) +
+  aes(x=reorder(strain, norm_dauer), y=norm_dauer) +
+  geom_col(alpha = 1, size = 0.15, position = "dodge", width = 0.8, color = 'black')+ 
+  theme_bw() +
+  theme(text = element_text(size=11, color = "black"), axis.title.x = element_text(size=13, color = "black"), axis.title.y = element_text(size=13, color = "black"), axis.text.x = element_blank(), axis.text.y = element_text(size=11, color = "black"), legend.position = 'none', panel.grid.major = element_blank(), axis.ticks.x = element_blank()) +
+    scale_y_continuous(breaks=c(0, 0.2, 0.4, 0.6, 0.8, 1.0))+
+  labs(x="157 wild isolates", y="Normalized \ndauer fraction")
+
+ ## Fig 2B - Manhattan plot
+  
+df_GWA_ascr5 <- resid_GWA_assay %>%
+  dplyr::select(strain, condition, resid_assay) %>%
+  dplyr::filter(condition == "ascr5.800nM") %>%
+  dplyr::group_by(strain) %>%
+  dplyr::summarise(assay_norm = mean(resid_assay))
+
+## GWA mapping
+
+ ## bonferroni
+
+manplot_manual <- function (plot_df, bf_line_color = "gray") 
+{
+    plot_traits <- unique(plot_df$trait)
+    plots <- lapply(plot_traits, function(i) {
+        plot_df %>% dplyr::filter(trait == i) %>% dplyr::distinct(marker, 
+            .keep_all = T) %>% 
+        ggplot2::ggplot(.) + 
+        ggplot2::aes(x = POS/1e+06, y = log10p) + 
+        ggplot2::scale_color_manual(values = c("black","red", "blue")) + 
+        ggplot2::geom_rect(ggplot2::aes(xmin = startPOS/1e+06, xmax = endPOS/1e+06, ymin = 0, ymax = Inf, fill = "blue"), 
+            color = "blue", fill = "cyan", linetype = 2, alpha = 0.3) + 
+       ggplot2::geom_hline(ggplot2::aes(yintercept = BF), color = bf_line_color, alpha = 0.75, size = 1) + 
+       ggplot2::geom_hline(ggplot2::aes(yintercept = -log10(0.05/72568)), color = bf_line_color, alpha = 0.75, size = 1, linetype = 2) + 
+       ggplot2::geom_point(ggplot2::aes(color = factor(aboveBF)), size = 0.5) + 
+       ggplot2::facet_grid(. ~ CHROM, scales = "free_x", space = "free_x") + 
+       ggplot2::theme_bw() + 
+        ggplot2::theme(axis.text.x = ggplot2::element_text(size = 9.5, color = "black" 
+            ), axis.text.y = ggplot2::element_text(size = 11, color = "black"), axis.title.x = ggplot2::element_text(size = 13, vjust = 1.3, color = "black"), axis.title.y = ggplot2::element_text(size = 13, color = "black"), strip.text.x = ggplot2::element_text(size = 10, color = "black"), strip.text.y = ggplot2::element_text(size = 11, color = "black"), legend.position = "none", 
+            panel.background = ggplot2::element_rect(color = "black", fill = NA,
+                size = 1.2), strip.background = ggplot2::element_rect(color = "black", 
+                size = 1.2), panel.border = element_rect(fill = NA, size = 1.5, color = 'black')) + 
+        ggplot2::labs(x = "Genomic Position (Mb)", y = expression(-log[10](p)))
+    })
+    plots
+}
+
+plot_GWA_assay_norm <- manplot_manual(process_mapping)[[1]]
+
+ ## Fig 2C - Phenotype x genotype plot
+
+df_GWA_pxg <- process_mapping %>%
+  dplyr::filter(trait == "assay_norm") %>%
+  na.omit() %>%
+  dplyr::mutate(resid_assay_min = min(value), resid_assay_max = max(value)) %>%
+  dplyr::group_by(marker, strain, allele) %>%
+  dplyr::summarise(norm_dauer = (value - resid_assay_min)/(resid_assay_max-resid_assay_min)) %>%
+  dplyr::ungroup()
+
+df_GWA_pxg$marker <- factor(df_GWA_pxg$marker, levels =  c("II_13410676", "III_1114673", "IV_13290433", "X_14145335"), labels =  c("II:13410676", "III:1114673", "IV:13290433", "X:14145335"))
+
+plot_GWA_pxg_assay_norm <- df_GWA_pxg %>%
+  ggplot(.)+
+  aes(x=factor(as.character(allele),labels = c("REF","ALT")), y = norm_dauer, fill = factor(as.character(allele),labels = c("REF","ALT")))+
+  geom_jitter(position=position_jitterdodge(jitter.width = 1), alpha = .7, size = 0.7)+
+  geom_boxplot(outlier.alpha = 0, alpha = 0.7)+
+  scale_fill_manual(values = c("#377EB8", "#E41A1C")) +
+  facet_grid(~marker)+
+  theme_bw()+
+  theme(text = element_text(size=11, color = "black"), axis.title = element_text(size=13, color = "black"), axis.text = element_text(size=11, color = "black"), legend.position = 'none', strip.text = element_text(size=9.5, color = "black")) +
+  labs(x="",y = "Normalized \ndauer fraction") +
+  scale_y_continuous(breaks=c(0, 0.2, 0.4, 0.6, 0.8, 1.0))
+
+ ### Fig 2
+
+Fig2A <- cowplot::plot_grid(plot_pheno_dist, labels ="a", label_size = 15)
+Fig2B <- cowplot::plot_grid(plot_GWA_assay_norm, labels ="b", label_size = 15)
+Fig2C <- cowplot::plot_grid(plot_GWA_pxg_assay_norm, labels = "c", label_size = 15)
+
+Fig2 <- cowplot::plot_grid(Fig2A, Fig2B, Fig2C, nrow=3, rel_heights = c(1,1.2,1))
+
+ggsave("~/Dropbox/AndersenLab/LabFolders/Daehan/Manuscripts/srg/Revision/figures/Fig2.png", plot = Fig2, width = 4.5, height = 6, units = "in")
+
+
+ ########## Fig 3 #############
+
+ ## Fig 3A - srg-37 gene model & deletion
+
+## CDS annotation with WS267 reference database
+
+srg37_model$numexons <- gsub(6, 5, srg37_model$numexons)
+srg37_model$exonstarts <- gsub("14233943,14234101,14234384,14234543,14234671,14235132,", "14235285,14234918,14234491,14234336,14234048,", srg37_model$exonstarts)
+srg37_model$exonends <- gsub("14234048,14234336,14234491,14234620,14234918,14235285,", "14235133,14234544,14234385,14234102,14233944,", srg37_model$exonends )
+
+gene_model <- function(df, genename = NA, WBID = NA, gene_color = "blue", intron_color = "black",
+                       utr3_color = "gray60", utr5_color = "gray60", gene_alpha = 0.5) {
+  if(is.na(genename)){
+    if(is.na(WBID)) {
+      stop("No gene provided. Give either gene name or WB ID")
+    } else {
+      selection <- df %>%
+        dplyr::filter(wbgene == WBID)
+    }
+  } else {
+    selection <- df %>%
+      dplyr::filter(gene == genename)
+  }
+  
+  if(nrow(selection) > 1){
+    stop("multiple entries with given gene name.")
+  }
+  
+  if(selection$strand == "+"){
+    
+    selection$txend <- as.numeric(selection$txend)
+    selection$codingend <- as.numeric(selection$codingend)
+    exonstarts <- matrix(as.numeric(unlist(strsplit(selection$exonstarts, ",")), ncol = selection$numexons))
+    
+    exonends <- matrix(as.numeric(unlist(strsplit(selection$exonends, ",")), ncol = selection$numexons))
+    
+    allexons <- data.frame("starts" = exonstarts, "ends" = exonends)
+    
+    intronstarts <- exonends[1:(nrow(exonends)-1)]
+    
+    intronends <- exonstarts[2:(nrow(exonends))]
+    
+    allintrons <- data.frame("starts" = intronstarts, "ends" = intronends) %>%
+      dplyr::mutate(midpoint = (starts+ends)/2)
+    
+    endUTR <- data.frame("x" = c(selection$codingend, selection$codingend, selection$txend), "y" = c(1, -1, 0))
+    
+    plot <- ggplot(allexons)+
+      geom_segment(aes(x = txstart, xend = txend+(.07*(txend-txstart)), y = 0, yend = 0), data = selection, color = "black", arrow = arrow(length = unit(0.1, "inches")))+
+      geom_rect(aes(xmin =  starts, xmax = ends, ymin = -1 , ymax = 1), fill = gene_color, color = "black", alpha = gene_alpha)+
+      geom_segment(aes(x = starts, y = 1, xend = midpoint, yend = 2), data = allintrons, color = intron_color)+
+      geom_segment(aes(x = midpoint, y = 2, xend = ends, yend = 1), data = allintrons, color = intron_color)+
+      geom_rect(aes(xmin = txstart, xmax = codingstart, ymin = -1, ymax = 1), data = selection, fill = utr3_color)+
+      geom_rect(aes(xmin = codingend, xmax = txend, ymin = -1, ymax = 1), data = selection, fill= "white", color = "white", lwd = 1.2)+
+      geom_polygon(aes(x = x, y = y), data = endUTR, fill = utr5_color, color = "black")+
+      theme(axis.title.x.top = element_text(size=11, color = "black"), axis.text.x.top = element_text(size=8, color = "black"), axis.title.y = element_text(size=12, color = "black", angle = 0, face = "italic"), axis.text.y = element_blank(), axis.ticks.y = element_blank(), axis.line.y = element_blank()) +
+      scale_x_continuous(position = "top") +
+      theme(plot.margin = margin(t=0.1, l=0.2, r=0.1, b=0.1, unit="in")) +
+      labs(x= "Chr X: 14233800-14235400", y = "srg-37")
+    
+    return(plot)
+    
+  } else {
+    
+    selection$txend <- as.numeric(selection$txend)
+    selection$codingend <- as.numeric(selection$codingend)
+    exonstarts <- matrix(as.numeric(unlist(strsplit(selection$exonstarts, ",")), ncol = selection$numexons))
+    
+    exonends <- matrix(as.numeric(unlist(strsplit(selection$exonends, ",")), ncol = selection$numexons))
+    
+    allexons <- data.frame("starts" = exonstarts, "ends" = exonends)
+    
+    intronstarts <- exonends[1:(nrow(exonends)-1)]
+    
+    intronends <- exonstarts[2:(nrow(exonends))]
+    
+    allintrons <- data.frame("starts" = intronstarts, "ends" = intronends) %>%
+      dplyr::mutate(midpoint = (starts+ends)/2)
+    
+    endUTR <- data.frame("x" = c(selection$codingstart, selection$codingstart, selection$txstart), "y" = c(1, -1, 0))
+    
+    plot <- ggplot(allexons)+
+      geom_segment(aes(x = txend, xend = txstart+(.07*(txstart-txend)), y = 0, yend = 0), data = selection, color = "black", arrow = arrow(length = unit(0.1, "inches")))+
+      geom_rect(aes(xmin =  starts, xmax = ends, ymin = -1 , ymax = 1), fill = gene_color, color = "black", alpha = gene_alpha)+
+      geom_segment(aes(x = starts, y = 1, xend = midpoint, yend = 2), data = allintrons, color = intron_color)+
+      geom_segment(aes(x = midpoint, y = 2, xend = ends, yend = 1), data = allintrons, color = intron_color)+
+      geom_rect(aes(xmin = txend, xmax = codingend, ymin = -1, ymax = 1), data = selection, fill = utr3_color)+
+      geom_rect(aes(xmin = codingstart, xmax = txstart, ymin = -1, ymax = 1), data = selection, fill= "white", color = "white", lwd = 1.2)+
+      geom_polygon(aes(x = x, y = y), data = endUTR, fill = utr5_color, color = "black")+
+      theme(axis.title.x.top = element_text(size=11, color = "black"), axis.text.x.top = element_text(size=8, color = "black"), axis.title.y = element_text(size=12, color = "black", angle = 0, face = "italic"), axis.text.y = element_blank(), axis.ticks.y = element_blank(), axis.line.y = element_blank()) +
+      scale_x_continuous(position = "top") +
+      theme(plot.margin = margin(t=0.1, l=0.2, r=0.1, b=0.1, unit="in")) +
+      labs(x= "Chr X: 14233800-14235400", y = "srg-37")
+    
+    return(plot)
+  }
+}
+
+plot_srg37del <- gene_model(srg37_model, genename = "K04C1.1a", gene_color = "#999999", gene_alpha = 0.4) +
+  geom_segment(aes(x = 14234136, xend = 14234232, y = -3, yend = -3), color = "#E41A1C", lwd = 2.5) +
+  geom_segment(aes(x = 14234015, xend = 14234907, y = -6, yend = -6), color = "#984EA3", lwd =3.5)
+
+  ## Fig 3B - Phenotypic association of srg-37 deletion allele
+
+srg37_joined <- srg37_df %>%
+  dplyr::left_join(., df_GWA_ascr5, by='strain') %>%
+  dplyr::select(strain, srg37, assay_norm) %>%
+  dplyr::filter(!is.na(assay_norm))
+
+plot_srg37_del_pxg <- srg37_joined %>%
+  dplyr::mutate(resid_assay_min = min(assay_norm), resid_assay_max = max(assay_norm)) %>%
+  dplyr::mutate(norm_dauer = (assay_norm - resid_assay_min)/(resid_assay_max-resid_assay_min)) %>%
+  dplyr::ungroup() %>%
+  ggplot(.) +
+  aes(x=srg37, y=norm_dauer, fill=srg37) +
+  geom_jitter(alpha=0.7, size = 0.7) +
+  geom_boxplot(outlier.alpha = 0, alpha = 0.7) +
+  scale_fill_manual(values = c("#377EB8", "#E41A1C")) +
+  scale_y_continuous(breaks=c(0, 0.2, 0.4, 0.6, 0.8, 1.0))+
+  theme_bw() +
+  labs(x="Genotype", y="Normalized \ndauer fraction") +  
+  theme(text = element_text(size=11, color = "black"), axis.title = element_text(size=12, color = "black"), axis.text = element_text(size=10, color = "black"), legend.position = 'none', axis.title.x = element_blank())
+
+  ## Fig 3C - reaction norm of CRISPR strains
+
+df_dauersrg_25C_dauer$strain <- factor(df_dauersrg_25C_dauer$strain, levels = c("JU346", "NIC166", "ECA1089", "ECA1091"), labels = c("srg-37(+)", "srg-37(ean179)", "srg-37(∆)", "srg-37(∆)"))
+                                         
+plot_srg_CRISPR_rn <- df_dauersrg_25C_dauer %>%
+  ggplot(.) +
+  aes(x = condition, 
+      y = dauer_fraction, fill=strain) +
+  scale_y_continuous(breaks=c(0, 0.2, 0.4, 0.6, 0.8, 1.0), limits=c(0, 1))+
+  geom_point(aes(fill=strain), position=position_jitterdodge(), alpha = .7, size =0.8) +
+  geom_boxplot(outlier.alpha = 0, alpha = 0.7)+ 
+  scale_fill_manual(values = c("#377EB8", "#E41A1C", "#984EA3", "#984EA3")) +
+  theme_bw() +
+  #theme(axis.title.y = element_text(size=12, color = "black"), axis.text = element_text(size=10, color = "black"), strip.text = element_text(size=10, color = "black"), legend.position = 'none') +
+  theme(text = element_text(size=11, color = "black"), axis.title = element_text(size=12, color = "black"), axis.text = element_text(size=10, color = "black"), legend.title = element_blank(), legend.text =element_text(size=8, color = "black", face = "italic"), legend.position = c(0.16, 0.75))+
+  labs(x="ascr#5 Concentration (nM)", y="Dauer fraction", fill="Genotype") +
+  facet_wrap(~haplotype, nrow=1)
+
+  ## Fig 3D - Tajima's D
+
+### Tajima's D
+
+tajimas_d_temp <- function (vcf_path = paste0(path.package("cegwas"), "/"), vcf_name = paste0("WI.", 
+                                                                                              vcf_version, ".impute.vcf.gz"), chromosome = "II", interval_start = 11021073, 
+                            interval_end = 12008179, window_size = 300, slide_distance = 100, 
+                            samples = sort(colnames(snps[, 5:ncol(snps)])), outgroup = "XZ1516", 
+                            site_of_interest = 11875145) 
+{
+  setwd(vcf_path)
+  gen <- PopGenome::readVCF(vcf_name, numcols = 10000, tid = chromosome, 
+                            frompos = interval_start, topos = interval_end, samplenames = samples, 
+                            approx = T)
+  gen1 <- PopGenome::set.populations(gen, list(samples), diploid = TRUE)
+  gen2 <- PopGenome::set.outgroup(gen1, outgroup, diploid = TRUE)
+  s_gen <- PopGenome::sliding.window.transform(gen2, width = window_size, 
+                                               jump = slide_distance, whole.data = FALSE)
+  test <- data.frame(snps = 1:length(as.numeric(colnames(as.data.frame(s_gen@BIG.BIAL[[1]][, 
+                                                                                           ])))), position = as.numeric(colnames(as.data.frame(s_gen@BIG.BIAL[[1]][, 
+                                                                                                                                                                   ]))))
+  slides <- list()
+  for (i in 1:length(s_gen@SLIDE.POS)) {
+    slides[[i]] <- data.frame(window = i, snps = s_gen@SLIDE.POS[[i]])
+  }
+  slides <- dplyr::rbind_all(slides) %>% dplyr::left_join(data.frame(test), 
+                                                          ., by = "snps")
+  s_gen_stats <- PopGenome::neutrality.stats(s_gen)
+  td <- data.frame(window = 1:length(s_gen@SLIDE.POS), Td = s_gen_stats@Tajima.D) %>% 
+    dplyr::left_join(slides, ., by = "window") %>% dplyr::group_by(window) %>% 
+    dplyr::mutate(swindow = min(as.numeric(position)), ewindow = max(as.numeric(position))) %>% 
+    dplyr::mutate(midwindow = (swindow + ewindow)/2) %>% 
+    dplyr::rename(Td = pop.1) %>% dplyr::distinct(Td, window, 
+                                                  .keep_all = T)
+  tajimas_d_plot <- ggplot2::ggplot(td) + ggplot2::geom_point(size = 0.8, alpha = 0.8, aes(x = midwindow/1e+06, y = Td)) + ggplot2::theme_bw() + 
+    ggplot2::theme(axis.text.x = ggplot2::element_text(size = 10, 
+                                                       color = "black"), axis.text.y = ggplot2::element_text(size = 10, 
+                                                                                                                            color = "black"), axis.title.x = ggplot2::element_text(size = 12, 
+                                                                                                                                                                                                  color = "black", vjust = -0.3), axis.title.y = ggplot2::element_text(size = 12, 
+                                                                                                                                                                                                                                                                                      color = "black"), strip.text.x = ggplot2::element_text(size = 10, 
+                                                                                                                                                                                                                                                                                                                                                            color = "black"), strip.text.y = ggplot2::element_text(size = 10, color = "black"), plot.title = ggplot2::element_text(size = 10, color = "black",                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              vjust = 1), legend.position = "none") + ggplot2::labs(x = "Genomic Position (Mb)", 
+                                                                                                                                               y = "Tajima's D")
+  if (!is.null(site_of_interest)) {
+    tajimas_d_plot <- tajimas_d_plot + ggplot2::geom_vline(ggplot2::aes(xintercept = site_of_interest/1e+06), 
+                                                           color = "red", alpha = 0.7, size = 2)
+  }
+  return(list(td, tajimas_d_plot))
+}
+
+### chrX Tajima's D - window size : 50 snps, mean window size in bp = 1477.074, slide_distance = 1 snp
+
+strains <- as.character(unique(df_CeNDR_collection$isotype))
+
+tajimaD_X <- tajimas_d_temp(vcf_path = "~/Dropbox/AndersenLab/LabFolders/Daehan/vcfs/",vcf_name = "fortajimaX_vcfver20180510.vcf.gz", 
+                         chromosome = "X", interval_start = 14200000, interval_end = 14250000, site_of_interest = NULL, slide_distance = 1, window_size = 50, samples = strains)
+
+## all_exon and all_intro data.frame for srg-36 and srg-37
+
+selection_srg36 <- srg36_model
+
+selection_srg36$txend <- as.numeric(selection_srg36$txend)
+selection_srg36$codingend <- as.numeric(selection_srg36$codingend)
+exonstarts_srg36 <- matrix(as.numeric(unlist(strsplit(selection_srg36$exonstarts, ",")), ncol = selection_srg36$numexons))
+exonends_srg36 <- matrix(as.numeric(unlist(strsplit(selection_srg36$exonends, ",")), ncol = selection_srg36$numexons))
+allexons_srg36 <- data.frame("starts" = exonstarts_srg36, "ends" = exonends_srg36)
+intronstarts_srg36 <- exonends_srg36[1:(nrow(exonends_srg36)-1)]
+intronends_srg36 <- exonstarts_srg36[2:(nrow(exonends_srg36))]
+allintrons_srg36 <- data.frame("starts" = intronstarts_srg36, "ends" = intronends_srg36) %>% dplyr::mutate(midpoint = (starts+ends)/2)
+
+selection_srg37 <- srg37_model
+
+selection_srg37$txend <- as.numeric(selection_srg37$txend)
+selection_srg37$codingend <- as.numeric(selection_srg37$codingend)
+exonstarts_srg37 <- matrix(as.numeric(unlist(strsplit(selection_srg37$exonstarts, ",")), ncol = selection_srg37$numexons))
+exonends_srg37 <- matrix(as.numeric(unlist(strsplit(selection_srg37$exonends, ",")), ncol = selection_srg37$numexons))
+allexons_srg37 <- data.frame("starts" = exonstarts_srg37, "ends" = exonends_srg37)
+intronstarts_srg37 <- exonends_srg37[1:(nrow(exonends_srg37)-1)]
+intronends_srg37 <- exonstarts_srg37[2:(nrow(exonends_srg37))]
+allintrons_srg37 <- data.frame("starts" = intronstarts_srg37, "ends" = intronends_srg37) %>% dplyr::mutate(midpoint = (starts+ends)/2)
+
+## Tajima's D plot with gene model
+
+plot_tajimaD_srg <- tajimaD_X[[2]] + 
+  scale_x_continuous(limits = c(14.2285, 14.236), breaks = c(14.230, 14.232, 14.234), expand = c(0,0)) +
+ scale_y_continuous(limits = c(-3.2,0.5), expand = c(0, 0)) +
+  theme(plot.margin = margin(b=0.5, l=0.1, r=0.1, t=0.1, unit = "in")) +
+  geom_segment(aes(xend = txstart/1e6+(.15*(txstart-txend)/1e6), x = txend/1e6, y = -2.5, yend = -2.5), data = selection_srg36, color = "black", arrow = arrow(length = unit(0.1, "inches"))) +
+  geom_rect(aes(xmin =starts/1e6, xmax = ends/1e6, ymin = -2.6 , ymax = -2.4), data = allexons_srg36, fill = "blue", color = "black", alpha = 0.5)+
+  geom_segment(aes(x = starts/1e6, y = -2.5, xend = midpoint/1e6, yend = -2.3), data = allintrons_srg36, color = "black")+
+  geom_segment(aes(x = midpoint/1e6, y = -2.3, xend = ends/1e6, yend = -2.5), data = allintrons_srg36, color = "black") +
+  geom_segment(aes(xend = txstart/1e6+(.15*(txstart-txend)/1e6), x = txend/1e6, y = -2.5, yend = -2.5), data = selection_srg37, color = "black", arrow = arrow(length = unit(0.1, "inches"))) +
+  geom_rect(aes(xmin =starts/1e6, xmax = ends/1e6, ymin = -2.6 , ymax = -2.4), data = allexons_srg37, fill = "red", color = "black", alpha = 0.5)+
+  geom_segment(aes(x = starts/1e6, y = -2.5, xend = midpoint/1e6, yend = -2.3), data = allintrons_srg37, color = "black")+
+  geom_segment(aes(x = midpoint/1e6, y = -2.3, xend = ends/1e6, yend = -2.5), data = allintrons_srg37, color = "black") +
+  annotate("text", label = "srg-36", x = 14.2302, y = -2.8, size = 3, colour = "black", fontface = "italic") +
+  annotate("text", label = "srg-37", x = 14.2345, y = -2.8, size = 3, colour = "black", fontface = "italic") 
+
+  ## Fig 3E - srg-36, 37 in JU346, NIC166
+
+df_srg3637_KO$strain <- factor(df_srg3637_KO$strain, levels = c("JU346(++)","NIC166(++)","NIC166(0+)","JU346(0+)","JU346(+0)","JU346(00)","NIC166(+0)","NIC166(00)"), labels = c("+\n+","+\nean179","∆\nean179","∆\n+","+\n∆","∆\n∆","+\n∆","∆\n∆"))
+df_srg3637_KO$background <- factor(df_srg3637_KO$background, levels = c("JU346", "NIC166"), labels = c("JU346 (srg-37(+))", "NIC166 (srg-37(ean179))") )
+
+plot_srg3637_CRISPR <- df_srg3637_KO %>%
+  ggplot(.) +
+  aes(x = strain, 
+      y = dauer_fraction, fill=background,
+      labs=background) +
+  geom_point(position=position_jitterdodge(), alpha = .7, size =0.8) +
+  geom_boxplot(outlier.alpha = 0, alpha = 0.7)+ 
+  scale_fill_manual(values = c("#377EB8", "#E41A1C")) +
+  theme_bw() +
+  theme(text = element_text(size=11, color = "black"), axis.title.x = element_text(size=10, color = "black", face = "italic", hjust = -0.1, vjust = 9.5), axis.title.y = element_text(size=12, color = "black"), axis.text.x = element_text(size=9, color = "black", face = "italic"), axis.text.y = element_text(size=10, color = "black"), legend.title = element_blank(), legend.text =element_text(size=8, color = "black", face = "italic"), legend.position = c(0.22, 0.82), strip.text = element_blank())+
+  labs(x="srg-36\nsrg-37", y="Dauer fraction", fill="Background", legend.margin = c(0,0,0,0), legend.background = element_blank()) +
+  scale_y_continuous(breaks = c(0, 0.2, 0.4, 0.6, 0.8, 1), limits=c(0, 1))+
+ facet_grid(~background, scales = 'free')
+
+Fig3AB <- cowplot::plot_grid(plot_srg37del, plot_srg37_del_pxg,nrow=2, labels = c("a", "b"), rel_heights = c(1.1,2), label_size = 15)
+Fig3C <- cowplot::plot_grid(plot_srg_CRISPR_rn, labels ="c", label_size = 15)
+Fig3ABC <- cowplot::plot_grid(Fig3AB, Fig3C, rel_widths = c(2,3), label_size = 15)
+Fig3D <- cowplot::plot_grid(plot_tajimaD_srg, labels ="d", label_size = 15)
+Fig3E <- cowplot::plot_grid(plot_srg3637_CRISPR, labels ="e", label_size = 15)
+Fig3DE <- cowplot::plot_grid(Fig3D, Fig3E, rel_widths = c(2,3), label_size = 15)
+
+Fig3 <- cowplot::plot_grid(Fig3ABC, Fig3DE, nrow=2, rel_heights = c(1,1))
+
+ggsave("~/Dropbox/AndersenLab/LabFolders/Daehan/Manuscripts/srg/Revision/figures/Fig3.png", plot = Fig3, width =7.5, height = 5.5, units = "in")
+
+
+ ###### Fig 4 #######
+ 
+ ## Fig 4A - worldwide distribuition of srg-37 deletion
+
+srg37_df_rename <- X_indel_manta %>%
+  dplyr::filter(V2==14234136) %>%
+  dplyr::select(isotype=V7, srg37 = V8)
+srg37_df_rename$srg37 <- gsub("0/1", "1/1", srg37_df_rename$srg37)
+srg37_df_rename$srg37 <- factor(srg37_df_rename$srg37, levels = c("0/0", "1/1"), labels = c("REF", "DEL"))
+
+df_strains_srg37 <- df_CeNDR_collection %>%
+  dplyr::left_join(., srg37_df_rename, by = 'isotype')
+
+del_strains <- as.character(dplyr::filter(df_strains_srg37, srg37 == "DEL")[[4]])
+ref_strains <- as.character(dplyr::filter(df_strains_srg37, srg37 == "REF")[[4]])
+
+### geographical distribution
+
+# Geographical allele distribution
+
+world <- map_data('world')
+world <- world[world$region != "Antarctica",] # intercourse antarctica
+
+isolation_info <- df_strains_srg37 %>%
+  dplyr::rename(long = longitude, lat = latitude) %>%
+  dplyr::filter(lat != "None")%>%
+  dplyr::filter(lat != "")%>%
+  dplyr::filter(!is.na(lat))
+
+isolation_info$lat <- as.numeric(as.character(isolation_info$lat))
+isolation_info$long <- as.numeric(as.character(isolation_info$long))
+
+isolation_info <- isolation_info %>%
+  dplyr::distinct(isotype, round(long, 1), round(lat, 1), substrate, srg37, .keep_all = T)
+
+nrow(filter(isolation_info, srg37 == "DEL")) ## 46 isotypes, 54 strains
+
+ ## World wo Europe labeling
+  
+plot_srg37_map_world <- 
+  ggplot()+ geom_map(data=world, map=world,
+                                aes(x=long, y=lat, map_id=region),
+                                color="black", fill="white", size=0.2)+
+  geom_point(data = dplyr::filter(isolation_info, srg37=="DEL"), aes(x=long, y=lat, fill=srg37), shape =21, size = 1.5, alpha = 1) +
+  geom_rect(aes(xmin = -10, xmax=25, ymin=35, ymax=57), size = 1, alpha=0, color = "blue") +
+  ggsn::scalebar(isolation_info, dist = 2000, dist_unit = "km", location = "bottomleft",
+             transform = TRUE, model = "WGS84", height = 0.02, st.size = 1.7, st.dist	= 0.03, border.size = 0.3) +
+  scale_fill_manual(values=c("red"),name = "Population")+
+  theme_map()+
+  theme(text = element_text(size=12), legend.position = 'none', plot.margin = margin(b=0, l=0, r=0, t=0, unit = "in"))
+
+plot_srg37_map_world
+
+ ## Fig 4b - Hybrid zone in Europe
+
+plot_srg37_map_Europe <- 
+  ggplot()+ geom_map(data=world, map=world,
+                                aes(x=long, y=lat, map_id=region),
+                                color="black", fill="white", size=0.3)+
+  geom_point(data = dplyr::filter(isolation_info, srg37=="DEL"), aes(x=long, y=lat, fill=srg37), shape =21, size = 3, alpha = 0.8) +
+  scale_fill_manual(values=c("red"),name = "Population")+
+  ggsn::scalebar(dplyr::filter(isolation_info, srg37=="DEL"), dist = 300, dist_unit = "km", location = "bottomleft",
+             transform = TRUE, model = "WGS84", height = 0.004, border.size = 0.3, st.size = 1.7, st.dist	= 0.005, anchor = c(x = 15.6, y = 35.5)) +
+  theme_map()+
+  theme(text = element_text(size=12), legend.position = 'none', plot.margin = margin(b=0.2, l=0.2, r=0.2, t=0.3, unit = "in")) +
+  lims(x=c(-10, 25), y=c(35, 57))
+
+plot_srg37_map_Europe
+
+  ## Fig 4C - X Chrom haplotype
+
+plot_df <-
+  df_processed_X_haps %>%
+  dplyr::rename(isotype=haplotype,
+                haplotype=value) %>%
+  dplyr::group_by(chromosome, isotype) %>%
+  dplyr::arrange(chromosome, isotype, start, stop) %>%
+  # Condense data structure
+  mutate(segment = data.table::rleid(haplotype)) %>%
+  dplyr::group_by(chromosome, isotype, segment) %>%
+  dplyr::mutate(start = min(start), stop = max(stop)) %>%
+  dplyr::distinct() %>%
+  dplyr::mutate(cvalue = as.integer(haplotype),
+                hap_length = stop - start,
+                haplotype=as.character(haplotype)) %>%
+  dplyr::select(chromosome, start, stop, haplotype, isotype, dplyr::everything()) %>%
+  dplyr::left_join(color_plotpoint, by = c("cvalue")) %>%
+  # Filter empty haplotypes
+  dplyr::filter(!is.na(haplotype)) %>%
+  # Determine the swept haplotype based on max(summation of lengths)
+  dplyr::group_by(chromosome, haplotype) %>%
+  dplyr::mutate(chrom_haplotype_sum = sum(hap_length)) %>%
+  dplyr::group_by(chromosome) %>% 
+  dplyr::mutate(swept_haplotype = max(chrom_haplotype_sum) == chrom_haplotype_sum) %>%
+  dplyr::mutate(swept_haplotype_name = ifelse(swept_haplotype, haplotype, NA),
+                swept_haplotype_name = base::Filter(Negate(is.na), unique(swept_haplotype_name)),
+                isotype_has_swept_haplotype = sum(swept_haplotype_name == haplotype) > 0,
+                isotypes_w_haplotype = length(unique(isotype))) %>%
+  # Determine max length of swept haplotype and % shared
+  dplyr::group_by(chromosome, haplotype, isotype) %>%
+  dplyr::mutate(isotype_swept_haplotype_length = sum(ifelse(swept_haplotype, hap_length, 0))) %>%
+  dplyr::group_by(chromosome, isotype) %>%
+  dplyr::mutate(isotype_swept_haplotype_length = max(isotype_swept_haplotype_length)) %>%
+  dplyr::group_by(chromosome) %>%
+  dplyr::mutate(max_swept_haplotype_length = max(isotype_swept_haplotype_length)) %>%
+  dplyr::group_by(chromosome, isotype) %>%
+  dplyr::mutate(max_haplotype_shared = isotype_swept_haplotype_length / max_swept_haplotype_length)
+
+# Filter chromosomes appropriately
+plot_df_filtered <- plot_df %>%
+  dplyr::arrange(chromosome, start, stop) %>%
+  # Filter out strains with tiny haplotypes
+  dplyr::mutate(filtered_swept_haplotype=
+                  (
+                    (hap_length > 1E5)
+                    &
+                      (max_haplotype_shared > 0.03)
+                    &
+                      (swept_haplotype == TRUE)
+                  )
+  ) %>%
+  dplyr::ungroup() %>%
+  dplyr::group_by(chromosome, isotype) %>%
+  dplyr::mutate(is_swept = (sum(filtered_swept_haplotype) > 0))
+
+## X sweep and srg-37 deletion
+
+df_Xhap <- plot_df_filtered %>%
+  dplyr::filter(chromosome == "X")
+
+df_Xhap_NIC2 <- df_Xhap %>%
+  dplyr::filter(haplotype == "NIC2") %>%
+  dplyr::left_join(., srg37_df_rename, by = 'isotype') %>%
+  dplyr::filter(start < 14233944, stop > 14235285) %>%
+  dplyr::distinct(strain = isotype, .keep_all = T)         ##### all sweep haplotype at srg locus has deletion
+
+## chromosome X sweep filling for srg-37 del strain
+
+ranked_by_sharing <- plot_df_filtered %>%
+  dplyr::ungroup() %>%
+  dplyr::filter(chromosome == "X") %>%
+  dplyr::filter(isotype %in% del_strains) %>%
+  dplyr::group_by(isotype) %>%
+  dplyr::select(isotype, max_haplotype_shared) %>%
+  dplyr::distinct() %>%
+  dplyr::ungroup() %>%
+  dplyr::arrange(desc(max_haplotype_shared)) %>%
+  dplyr::mutate(plotpoint=row_number()) %>%
+  dplyr::select(-max_haplotype_shared) %>%
+  dplyr::arrange(plotpoint)
+
+strain_labels <- ranked_by_sharing$isotype
+
+plot_del_Xhap <- plot_df_filtered %>%
+  dplyr::filter(chromosome == "X") %>%
+  dplyr::filter(isotype %in% del_strains) %>%
+  dplyr::select(-plotpoint) %>%
+  dplyr::left_join(ranked_by_sharing) %>%
+  ggplot(.,
+         aes(xmin = start/1E6, xmax = stop/1E6,
+             ymin = plotpoint - 0.5, ymax = plotpoint + 0.5,
+             fill = filtered_swept_haplotype)) +
+  geom_rect() +
+  scale_fill_manual(values = c("TRUE"="Red", "FALSE"="Gray")) +
+  scale_y_continuous(breaks = 1:length(strain_labels),
+                     labels = strain_labels,
+                     expand = c(0, 0), position = 'right') +
+  xlab("Position (Mb)") +
+  theme_bw() +
+  facet_grid(~chromosome) +
+  ggplot2::geom_vline(ggplot2::aes(xintercept = 14229668/1e+06), color = "blue", alpha = 0.7, size = 0.5) + 
+  ggplot2::geom_vline(ggplot2::aes(xintercept = 14235285/1e+06), color = "blue", alpha = 0.7, size = 0.5) + 
+  theme(axis.text.x = element_text(size=11, color = "black"), axis.text.y = element_blank(), strip.text = element_text(size=11, color = "black"), legend.position = 'none', axis.title.x = element_text(size=13, color = "black"), plot.margin = margin(b=0, l=0.3, r=0.1, t=0.1, unit = "in")) +
+  scale_x_continuous(expand = c(0, 0))
+
+  ## Fig 4d - Phylogeny tree
+
+df_srg37_tree <- X_indel_manta %>%
+  dplyr::filter(V2==14234136) %>%
+  dplyr::select(strain=V7, srg37 = V8)
+df_srg37_tree$srg37 <- gsub("0/1", "1/1", df_srg37_tree$srg37)
+del_strains <- as.character(dplyr::filter(df_srg37_tree, srg37 != "0/0")[[1]])
+df_srg37_tree$srg37 <- factor(df_srg37_tree$srg37, levels = c("0/0", "1/1"), labels = c("Not", "DEL"))
+
+df_srg37_tree$strain <- gsub("AB4", "CB4858", df_srg37_tree$strain)
+df_srg37_tree$strain <- gsub("JU312", "JU311", df_srg37_tree$strain)
+
+## 249 set with XZ1516 outgroup
+
+highlight_color <- "red"
+background_color <- "#000F08"
+
+tree_pt<-ggtree(tree,
+                branch.length="rate")
+
+tree_pt %<+% dplyr::filter(df_srg37_tree, srg37 == "Del") + 
+  geom_tiplab2(aes(color=srg37))+
+  scale_color_manual(values=c("Not" = background_color, "Del" = highlight_color))
+
+## tree drawing
+
+rooted.tree <- root(tree, which(tree$tip.label == "XZ1516"))
+
+tree_pt<-ggtree(rooted.tree,
+                branch.length="rate")
+
+srg37_strains <- list(srg37 = del_strains)
+
+tree_pt_h <- ggtree::groupOTU(rooted.tree, srg37_strains)
+
+plot_tree <- ggtree(tree_pt_h,
+                    branch.length="rate", 
+                    aes(color=group, size = group)) + 
+  geom_tiplab(align = T, size = 1, linesize = 0.3) +
+  scale_size_manual(values=c(.2, .4)) +
+  scale_color_manual(values=c(background_color, highlight_color), 
+                     name = "Presence of srg37", 
+                     breaks=c("0", "srg37"),
+                     labels=c("FALSE", "TRUE")) + 
+  scale_y_continuous(expand = c(0.01, 0.02)) +
+  theme_tree2(axis.text.x = element_text(size=11)) +
+  xlim(0,0.22)
+
+plot_tree_landscape <- ggtree(tree_pt_h,
+                    branch.length="rate", 
+                    aes(color=group, size = group)) + 
+  xlim(0.2, 0) +
+  scale_size_manual(values=c(.3, .5)) +
+  scale_color_manual(values=c(background_color, highlight_color), 
+                     name = "Presence of srg37", 
+                     breaks=c("0", "srg37"),
+                     labels=c("FALSE", "TRUE")) + 
+  scale_y_continuous(expand = c(0.03, 0.02)) +
+  coord_flip() +
+  theme_tree2(axis.text.x = element_blank()) +
+  theme(axis.line.x = element_blank(), axis.ticks.x = element_blank(), plot.margin = margin(b=0, l=0.15, r=0, t=0, unit = "in"))
+
+## Fig 4e - srg-37(ean179) substrate association
+
+df_all_WIs <- df_CeNDR_collection
+
+df_all_WIs$substrate <- gsub("Isopod", "Animal", df_all_WIs$substrate)
+df_all_WIs$substrate <- gsub("Millipede", "Animal", df_all_WIs$substrate)
+df_all_WIs$substrate <- gsub("Snail", "Animal", df_all_WIs$substrate)
+df_all_WIs$substrate <- gsub("Slug", "Animal", df_all_WIs$substrate)
+
+## strains from co-sampling zone
+
+co_sample <- c("JU3125", "JU3127", "NIC508", "NIC511", "NIC512", "NIC207", "NIC255", "NIC231", "NIC277", "NIC1107", "NIC1", "NIC2", "NIC3", "MY10", "MY18", "MY14", "MY2014", "MY2054", "MY2004", "MY16", "MY15", "MY2144", "MY559", "MY2142", "MY2344", "MY864", "MY518", "MY2208", "MY538", "MY2585", "MY2741", "MY2640", "MY2685", "MY2688", "MY2623", "MY2693", "MY2635", "MY795", "MY2630", "MY2692", "MY2042", "MY2532", "MY2530", "MY2373", "MY2138", "MY2143", "MY2481", "MY2212", "MY803", "MY679", "MY2022", "MY2024", "MY2109", "MY772", "MY2099", "MY2078", "WN2002", "WN2033", "WN2050", "JU1586", "JU1792", "JU2139", "JU2828", "JU2581", "JU2257", "JU262", "JU1484", "JU1026", "JU2141", "JU2600", "JU2151", "JU1924", "JU1934", "JU1793", "JU1218", "JU1242", "JU1246", "JU3138", "JU3132", "JU1511", "JU3134", "JU1543", "JU3136", "JU1580", "JU1807", "JU1530", "JU3131", "JU3137", "JU1563", "JU3133", "JU3135", "JU2593", "NIC501", "JU2800", "JU2825", "JU1566", "JU2572", "JU1808", "JU751", "JU2566", "JU2578", "JU642", "JU393", "JU394", "JU395", "JU438", "JU397", "JU406", "BRC20067", "BRC20113", "BRC20231", "JU2811", "BRC20263", "ED3042", "ED3043", "ED3049", "ED3046", "ED3057", "ED3077", "EG4348", "EG4349", "EG4945", "EG4680", "ECA246", "PS2025", "JU1960", "CB4854", "CB3198", "CB3199", "CX11268", "CX11264", "CX11314", "CX11294", "CX11307", "CX11254")
+
+## all class
+
+df_strains_allele <- df_all_WIs %>%
+  dplyr::filter(isotype %in% unique(df_CeNDR_collection$isotype)) %>%
+  dplyr::left_join(., srg37_df_rename, by = 'isotype') %>%
+  dplyr::filter(substrate != "None", strain %in% co_sample)
+  
+isolation_info_allele <- df_strains_allele %>%
+  dplyr::rename(long = longitude, lat = latitude)%>%
+  dplyr::filter(lat != "None")%>%
+  dplyr::filter(lat != "")%>%
+  dplyr::filter(!is.na(lat))
+
+isolation_info_allele$lat <- as.numeric(as.character(isolation_info_allele$lat))
+isolation_info_allele$long <- as.numeric(as.character(isolation_info_allele$long))
+
+## number of strains and isotypes in co-sampling zone
+
+df_co_sample <- isolation_info_allele %>%
+  dplyr::filter(strain %in% co_sample) %>%
+  dplyr::distinct(isotype, round(long, 1), round(lat, 1), substrate, srg37, .keep_all = T) %>%
+  dplyr::select(strain, isotype, allele = srg37, substrate, latitude = lat, longitude = long, elevation, landscape, isolation_date, source_lab, isolated_by, sampled_by)
+
+length(unique(df_co_sample$isotype))
+length(unique(df_co_sample$strain))
+
+df_co_sample_3sub <- isolation_info_allele %>%
+  dplyr::filter(strain %in% co_sample) %>%
+  dplyr::distinct(isotype, round(long, 1), round(lat, 1), substrate, srg37, .keep_all = T) %>%
+  dplyr::mutate(GT_num = ifelse(srg37 == "REF", 1, 0)) %>%
+  dplyr::group_by(substrate) %>%
+  dplyr::mutate(freq_REF=mean(GT_num), freq_ALT = 1-mean(GT_num), n_substrate = n()) %>%
+  dplyr::ungroup() %>%
+  dplyr::filter(n_substrate >= 10)
+
+length(unique(df_co_sample_3sub$isotype))
+length(unique(df_co_sample_3sub$strain))
+
+colocal_allele_substrate <- isolation_info_allele %>%
+  dplyr::filter(strain %in% co_sample) %>%
+  dplyr::distinct(isotype, round(long, 1), round(lat, 1), substrate, srg37, .keep_all = T) %>%
+  dplyr::mutate(GT_num = ifelse(srg37 == "REF", 1, 0)) %>%
+  dplyr::group_by(substrate) %>%
+  dplyr::mutate(freq_REF=mean(GT_num), freq_ALT = 1-mean(GT_num), n_substrate = n()) %>%
+  dplyr::ungroup() %>%
+  dplyr::distinct(substrate, n_substrate, freq_REF, freq_ALT) %>%
+  dplyr::filter(n_substrate >= 10) %>%
+  tidyr::gather(-substrate, -n_substrate, key="class", value = "freq")
+
+colocal_allele_substrate$class <- factor(colocal_allele_substrate$class, levels = c("freq_REF", "freq_ALT"), labels = c(" srg-37(+)", " srg-37(ean179)"))
+
+plot_substrate_allele <- colocal_allele_substrate %>%
+  dplyr::mutate(substrate = paste(substrate, " (n =", n_substrate, ")", sep = "")) %>%
+  ggplot(.) +
+  aes(x=substrate, y=freq, fill = factor(class))+
+  scale_fill_manual(values = c("Gray", "red")) +
+  scale_y_continuous(breaks=c(0, 0.2, 0.4, 0.6, 0.8, 1.0), limits=c(0, 1))+
+  geom_col() +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle=90, hjust = 1, vjust = 0.5, size = 11, color = 'black'), axis.text.y = element_text(size = 11, color = 'black'), axis.title = element_text(size=13, color = 'black'), legend.text = element_text(size = 10, color = 'black', face = "italic"), legend.title = element_blank(), legend.margin = margin(b=0.02, l=0.02, r=0.02, t=-0.05, unit = "in"), legend.position = c(0.6,0.75), legend.background =  element_rect(fill = "white", size = 0, linetype = "solid"), panel.grid.major.x = element_blank()) +
+  labs(x = "Substrate", y="Frequency")
+
+plot_substrate_allele
+
+## Enrichment test - using phyper
+
+df_substrate_enrich_allele <- isolation_info_allele %>%
+  dplyr::distinct(isotype, round(long, 1), round(lat, 1), substrate, srg37, .keep_all = T) %>%
+  dplyr::group_by(substrate,srg37) %>%
+  dplyr::summarise(count = n()) %>%
+  dplyr::ungroup() %>%
+  dplyr::group_by(substrate) %>%
+  dplyr::mutate(n_substrate = sum(count)) %>%
+  dplyr::ungroup() %>%
+  dplyr::filter(n_substrate >= 10)
+
+print(sum(df_substrate_enrich_allele$n_substrate)/2) ## total N = 82
+
+sum(filter(df_substrate_enrich_allele, srg37 == "REF")$count) ## REF = 61
+sum(filter(df_substrate_enrich_allele, srg37 == "DEL")$count) ## DEL = 21
+
+# animal - expected frequency
+phyper(2, 21, 61, 13) # p = 0.29 / close to average
+
+# compost - expected frequency
+phyper(7, 21, 61, 41) # compost p = 0.064
+
+# rotting fruit - expected frequency = 7.17
+phyper(12, 21, 61, 28, lower.tail = FALSE) # Rotting fruit p = 0.0026
+
+
+Fig4A <- cowplot::plot_grid(plot_srg37_map_world, labels ="a", label_size = 18)
+Fig4B <- cowplot::plot_grid(plot_srg37_map_Europe, labels ="b", label_size = 18)
+Fig4C <- cowplot::plot_grid(plot_del_Xhap, labels ="c", label_size = 18)
+Fig4D <- cowplot::plot_grid(plot_tree_landscape, labels ="d", label_size = 18)
+Fig4E <- cowplot::plot_grid(plot_substrate_allele, labels ="e", label_size = 18)
+
+Fig4ABC <- cowplot::plot_grid(Fig4A, Fig4B, Fig4C, nrow=1, rel_widths = c(3.2,1.8,2), label_size = 18)
+Fig4DE <- cowplot::plot_grid(Fig4D, Fig4E, nrow=1, rel_widths = c(5,2), label_size = 18)
+
+Fig4 <- cowplot::plot_grid(Fig4ABC, Fig4DE, nrow=2, rel_heights = c(1,1.3), label_size = 18)
+
+ggsave("~/Dropbox/AndersenLab/LabFolders/Daehan/Manuscripts/srg/Revision/figures/Fig4.png", plot = Fig4, width = 10, height = 6, units = "in")
+
+
+
+
+############### Supplementary Figures ###################
+
+## Fig S1
+
+df_dose25C_dauer_ascr23 <- df_dose25C_dauer %>%
+  dplyr::filter(condition %in% c("ascr2", "ascr3"))
+
+df_dose25C_dauer_ascr23$condition <- factor(df_dose25C_dauer_ascr23$condition, levels = c("ascr2", "ascr3"), labels = c("ascr#2", "ascr#3"))
+
+plot_ascr23_dose <- df_dose25C_dauer_ascr23  %>%
+  ggplot(.) +
+  aes(x = concentration, 
+      y = dauer_fraction, 
+      fill=strain, labs=strain) +
+  scale_y_continuous(breaks=c(0, 0.2, 0.4, 0.6, 0.8, 1.0))+
+  geom_point(aes(fill=strain), position=position_jitterdodge(jitter.width = 0.1), alpha = .7, size = 0.7) +
+  geom_boxplot(outlier.alpha = 0, alpha = 0.7)+
+  scale_fill_manual(values = c("gold2", "plum4", "darkorange1", "lightskyblue2")) +
+  theme_bw() +
+  facet_grid(~condition) +
+  theme(text = element_text(size=11, color = "black"), axis.title = element_text(size=13, color = "black"), axis.text = element_text(size=11, color = "black"), legend.title = element_text(size=11, color = "black"), legend.text = element_text(size=10, color = "black"), strip.text = element_text(size=11, color = "black")) +
+  labs(x="Concentration (nM)", y="Dauer fraction", fill = "Strain")
+
+ggsave("~/Dropbox/AndersenLab/LabFolders/Daehan/Manuscripts/srg/Revision/figures/FigS1.png", plot = plot_ascr23_dose, width = 6, height = 3.5, units = "in")
+
+### Supplementary Figure 2 - Maps for 249 strains / 157 tested strains
+
+# Geographical allele distribution
+
+tested_wi <- as.character(unique(resid_GWA_assay$strain))
+
+isotype_info <- df_CeNDR_collection %>%
+  dplyr::filter(reference_strain == "True") %>%
+  dplyr::mutate(tested = ifelse(strain %in% tested_wi, "T", "F")) %>%
+  dplyr::rename(long = longitude, lat = latitude) %>%
+  dplyr::filter(lat != "None")%>%
+  dplyr::filter(lat != "")%>%
+  dplyr::filter(!is.na(lat))
+
+isotype_info$lat <- as.numeric(as.character(isotype_info$lat))
+isotype_info$long <- as.numeric(as.character(isotype_info$long))
+
+length(unique(isotype_info$strain))
+length(unique(filter(isotype_info, tested == "T")$strain))
+
+ ## 249 isotype set (239 isotypes (total), 151 isotypes (tested) with lat and long) / labeled by tested or not
+  
+plot_map_world <- 
+  ggplot()+ geom_map(data=world, map=world,
+                                aes(x=long, y=lat, map_id=region),
+                                color="black", fill="white", size=0.2)+
+  geom_point(data = isotype_info, aes(x=long, y=lat, fill=tested), shape =21, size = 1.8, alpha = 0.9) +
+  scale_fill_manual(values=c("grey", "#4DAF4A"), name = "Population")+
+  ggsn::scalebar(isolation_info, dist = 2000, dist_unit = "km", location = "bottomleft",
+             transform = TRUE, model = "WGS84", height = 0.02, st.size = 1.7, st.dist	= 0.03, border.size = 0.3) +
+  theme_map()+
+  theme(text = element_text(size=12), legend.position = 'none', plot.margin = margin(b=0, l=0, r=0, t=0, unit = "in"))
+
+ggsave("~/Dropbox/AndersenLab/LabFolders/Daehan/Manuscripts/srg/Revision/figures/FigS2.png", plot = plot_map_world, width = 7.5, height = 4, units = "in")
+
+### Supplementary Figure 3 - LD plot
+
+snp_df <- process_mapping %>% na.omit()
+ld_snps <- dplyr::filter(gm, CHROM %in% snp_df$CHROM, POS %in% 
+      snp_df$POS)
+ld_snps <- data.frame(snp_id = paste(ld_snps$CHROM, ld_snps$POS, 
+        sep = "_"), data.frame(ld_snps)[, 5:ncol(ld_snps)])
+sn <- list()
+    for (i in 1:nrow(ld_snps)) {
+        sn[[i]] <- genetics::genotype(as.character(gsub(1, "T/T", 
+            gsub(-1, "A/A", ld_snps[i, 4:ncol(ld_snps)]))))
+    }
+    test <- data.frame(sn)
+    colnames(test) <- (ld_snps$snp_id)
+    ldcalc <- t(genetics::LD(test)[[4]])^2
+    diag(ldcalc) <- 1
+    LDs <- tbl_df(data.frame(ldcalc) %>% dplyr::add_rownames(var = "SNP1")) %>% 
+            tidyr::gather(SNP2, r2, -SNP1) %>% dplyr::arrange(SNP1) %>% 
+            tidyr::separate(SNP1, sep = "_", into = c("CHROM1", 
+                "POS1"), remove = F) %>% dplyr::arrange(CHROM1, 
+            as.numeric(POS1))
+    ldplot <- ggplot2::ggplot(LDs) + ggplot2::aes(x = factor(SNP1, 
+            levels = unique(SNP1), ordered = T), y = factor(SNP2, 
+            levels = unique(SNP1), ordered = T)) + ggplot2::geom_tile(ggplot2::aes(fill = r2)) + 
+            ggplot2::geom_text(ggplot2::aes(label = signif(r2, 
+                3)), fontface = "bold", size = 4.5) + ggplot2::theme(text = ggplot2::element_text(size = 9.5, 
+            color = "black"), axis.text = ggplot2::element_text(size = 9.5, 
+            color = "black"), axis.text.y = ggplot2::element_text(size = 9.5, 
+            color = "black"), axis.title.x = ggplot2::element_text(size = 0, 
+            face = "bold", color = "black", vjust = -0.3), axis.title.y = ggplot2::element_text(size = 0, 
+            face = "bold", color = "black"), legend.position = "none") + 
+            scale_x_discrete(labels = function(x) {
+                gsub("_", ":", x)
+            }, expand = c(0, 0)) + scale_y_discrete(position = "right", 
+            labels = function(x) {
+                gsub("_", ":", x)
+            }, expand = c(0, 0)) + scale_fill_continuous(high = "#FF0000", 
+            low = "white", na.value = "white")
+
+ggsave("~/Dropbox/AndersenLab/LabFolders/Daehan/Manuscripts/srg/Revision/figures/FigS3.png", plot = ldplot, width = 5, height = 3.5, units = "in")
+
+
+## Fig S4 - dauf-1 QTL fine mapping
+
+interval_genes <- function(fine_map_df, genes_of_interest = NULL){
+  
+  interval_plots <- list()
+  for(r in 1:length(unique(fine_maps$QTL_INTERVAL_START))){
+    
+    gene_df <- fine_map_df %>%
+      dplyr::filter(QTL_INTERVAL_START == unique(fine_maps$QTL_INTERVAL_START)[r]) %>%
+      dplyr::distinct(WBGeneID, PEAK_MARKER, CHROM, STRAND, TRANSCRIPTION_START_POS, TRANSCRIPTION_END_POS, QTL_INTERVAL_START, QTL_INTERVAL_END, VARIANT_LOG10p) %>%
+      dplyr::group_by(WBGeneID) %>%
+      dplyr::mutate(VARIANT_LOG10p = max(VARIANT_LOG10p, na.rm = T)) %>%
+      dplyr::distinct()
+    
+  peak_variant <- as.numeric(strsplit(as.character(na.omit(unique(gene_df$PEAK_MARKER))), split = ":")[[1]][2])
+
+    variant_df <- fine_maps %>%
+      dplyr::filter(QTL_INTERVAL_START == unique(fine_maps$QTL_INTERVAL_START)[r]) %>%
+      dplyr::distinct(CHROM, POS, VARIANT_LOG10p, VARIANT_IMPACT)
+    
+    variant_df$VARIANT_IMPACT[is.na(variant_df$VARIANT_IMPACT)] ## <- "Intergenic"
+    
+    xs <- unique(gene_df$QTL_INTERVAL_START)
+    xe <- unique(gene_df$QTL_INTERVAL_END)
+    gc <- unique(gene_df$CHROM)
+    
+    max_logp <- unique(max(variant_df$VARIANT_LOG10p))/150
+    
+    gene_plot <- ggplot(gene_df) +
+      geom_vline(aes(xintercept = peak_variant/1e6),
+                 linetype = 2, color = "purple", size = 1, alpha = 0.8)+
+      geom_segment(aes(x = ifelse(STRAND == "+", TRANSCRIPTION_START_POS/1e6, TRANSCRIPTION_END_POS/1e6),
+                       xend = ifelse(STRAND == "+", TRANSCRIPTION_END_POS/1e6, TRANSCRIPTION_START_POS/1e6),
+                       y = VARIANT_LOG10p,
+                       yend = VARIANT_LOG10p, color = STRAND),
+                   arrow = arrow(length = unit(3, "points")), size = 1.5) +
+      geom_segment(aes(x = POS/1e6,
+                       xend = POS/1e6,
+                       y = VARIANT_LOG10p+max_logp,
+                       yend = VARIANT_LOG10p-max_logp),
+                       data = variant_df, color = "gray30", alpha = 0.7) +
+ 
+      labs(x = "Genomic Position (Mb)",
+           y = expression(-log[10](italic(p))))+
+      theme_bw(18)+
+      xlim(c(xs/1e6, xe/1e6)) +
+
+      theme(legend.position = 'none', panel.grid = element_blank())
+    
+    if(!is.null(genes_of_interest)){
+      
+      df_i <- gene_df %>% dplyr::filter(WBGeneID %in% genes_of_interest)
+      
+      gene_locus <- (df_i$TRANSCRIPTION_START_POS/1e6+df_i$TRANSCRIPTION_END_POS/1e6)/2
+      
+      gene_plot <- gene_plot + geom_vline(xintercept = gene_locus, linetype = 2, color = "green", size = 1, alpha = 0.8)
+                  }
+    
+    interval_plots[[r]] <- gene_plot
+  }
+  return(interval_plots)
+}
+
+interval_plots <- interval_genes(fine_maps, genes_of_interest = "WBGene00005194")
+
+ggsave("~/Dropbox/AndersenLab/LabFolders/Daehan/Manuscripts/srg/Revision/figures/FigS4.png", plot = interval_plots[[4]], width = 7.5, height = 5, units = "in")
+
+## Fig S5 - srg-36 gene model & deletion
+
+gene_model_srg36 <- function(df, genename = NA, WBID = NA, gene_color = "blue", intron_color = "black",
+                       utr3_color = "gray60", utr5_color = "gray60", gene_alpha = 0.5) {
+  if(is.na(genename)){
+    if(is.na(WBID)) {
+      stop("No gene provided. Give either gene name or WB ID")
+    } else {
+      selection <- df %>%
+        dplyr::filter(wbgene == WBID)
+    }
+  } else {
+    selection <- df %>%
+      dplyr::filter(gene == genename)
+  }
+  
+  if(nrow(selection) > 1){
+    stop("multiple entries with given gene name.")
+  }
+  
+  if(selection$strand == "+"){
+    
+    selection$txend <- as.numeric(selection$txend)
+    selection$codingend <- as.numeric(selection$codingend)
+    exonstarts <- matrix(as.numeric(unlist(strsplit(selection$exonstarts, ",")), ncol = selection$numexons))
+    
+    exonends <- matrix(as.numeric(unlist(strsplit(selection$exonends, ",")), ncol = selection$numexons))
+    
+    allexons <- data.frame("starts" = exonstarts, "ends" = exonends)
+    
+    intronstarts <- exonends[1:(nrow(exonends)-1)]
+    
+    intronends <- exonstarts[2:(nrow(exonends))]
+    
+    allintrons <- data.frame("starts" = intronstarts, "ends" = intronends) %>%
+      dplyr::mutate(midpoint = (starts+ends)/2)
+    
+    endUTR <- data.frame("x" = c(selection$codingend, selection$codingend, selection$txend), "y" = c(1, -1, 0))
+    
+    plot <- ggplot(allexons)+
+      geom_segment(aes(x = txstart, xend = txend+(.07*(txend-txstart)), y = 0, yend = 0), data = selection, color = "black", arrow = arrow(length = unit(0.1, "inches")))+
+      geom_rect(aes(xmin =  starts, xmax = ends, ymin = -1 , ymax = 1), fill = gene_color, color = "black", alpha = gene_alpha)+
+      geom_segment(aes(x = starts, y = 1, xend = midpoint, yend = 2), data = allintrons, color = intron_color)+
+      geom_segment(aes(x = midpoint, y = 2, xend = ends, yend = 1), data = allintrons, color = intron_color)+
+      geom_rect(aes(xmin = txstart, xmax = codingstart, ymin = -1, ymax = 1), data = selection, fill = utr3_color)+
+      geom_rect(aes(xmin = codingend, xmax = txend, ymin = -1, ymax = 1), data = selection, fill= "white", color = "white", lwd = 1.2)+
+      geom_polygon(aes(x = x, y = y), data = endUTR, fill = utr5_color, color = "black")+
+      theme(axis.title.x.top = element_text(size=11, color = "black"), axis.text.x.top = element_text(size=8, color = "black"), axis.title.y = element_text(size=13, color = "black", angle = 0, face = "italic"), axis.text.y = element_blank(), axis.ticks.y = element_blank(), axis.line.y = element_blank()) +
+scale_x_continuous(position = "top", breaks = c(14229300,14229700, 14230100, 14230500, 14230900), limits=c(14229200,14231000)) +
+      theme(plot.margin = margin(t=0.1, l=0.2, r=0.1, b=0.1, unit="in")) +
+      labs(x="Chr X: 14229200-14231000", y = "srg-36")
+    
+    return(plot)
+    
+  } else {
+    
+    selection$txend <- as.numeric(selection$txend)
+    selection$codingend <- as.numeric(selection$codingend)
+    exonstarts <- matrix(as.numeric(unlist(strsplit(selection$exonstarts, ",")), ncol = selection$numexons))
+    
+    exonends <- matrix(as.numeric(unlist(strsplit(selection$exonends, ",")), ncol = selection$numexons))
+    
+    allexons <- data.frame("starts" = exonstarts, "ends" = exonends)
+    
+    intronstarts <- exonends[1:(nrow(exonends)-1)]
+    
+    intronends <- exonstarts[2:(nrow(exonends))]
+    
+    allintrons <- data.frame("starts" = intronstarts, "ends" = intronends) %>%
+      dplyr::mutate(midpoint = (starts+ends)/2)
+    
+    endUTR <- data.frame("x" = c(selection$codingstart, selection$codingstart, selection$txstart), "y" = c(1, -1, 0))
+    
+    plot <- ggplot(allexons)+
+      geom_segment(aes(x = txend, xend = txstart+(.07*(txstart-txend)), y = 0, yend = 0), data = selection, color = "black", arrow = arrow(length = unit(0.1, "inches")))+
+      geom_rect(aes(xmin =  starts, xmax = ends, ymin = -1 , ymax = 1), fill = gene_color, color = "black", alpha = gene_alpha)+
+      geom_segment(aes(x = starts, y = 1, xend = midpoint, yend = 2), data = allintrons, color = intron_color)+
+      geom_segment(aes(x = midpoint, y = 2, xend = ends, yend = 1), data = allintrons, color = intron_color)+
+      geom_rect(aes(xmin = txend, xmax = codingend, ymin = -1, ymax = 1), data = selection, fill = utr3_color)+
+      geom_rect(aes(xmin = codingstart, xmax = txstart, ymin = -1, ymax = 1), data = selection, fill= "white", color = "white", lwd = 1.2)+
+      geom_polygon(aes(x = x, y = y), data = endUTR, fill = utr5_color, color = "black")+
+      theme(axis.title.x.top = element_text(size=11, color = "black"), axis.text.x.top = element_text(size=8, color = "black"), axis.title.y = element_text(size=13, color = "black", angle = 0, face = "italic"), axis.text.y = element_blank(), axis.ticks.y = element_blank(), axis.line.y = element_blank()) +
+scale_x_continuous(position = "top", breaks = c(14229300,14229700, 14230100, 14230500, 14230900), limits=c(14229200,14231000)) +
+      theme(plot.margin = margin(t=0.1, l=0.2, r=0.1, b=0.1, unit="in")) +
+      labs(x= "Chr X: 14229200-14231000", y = "srg-36")
+    
+    return(plot)
+  }
+}
+
+plot_srg36del <- gene_model_srg36(srg36_model, genename = "K04C1.6", gene_color = "#999999", gene_alpha = 0.4) +
+  geom_segment(aes(x = 14229671, xend = 14230082, y = -2.5, yend = -2.5), color = "#FFD700", lwd = 2) +
+  geom_segment(aes(x = 14229346, xend = 14230885, y = -4, yend = -4), color = "#984EA3", lwd =2.5)
+
+ggsave("~/Dropbox/AndersenLab/LabFolders/Daehan/Manuscripts/srg/Revision/figures/FigS5.png", plot = plot_srg36del, width = 3.5, height = 1.2, units = "in")
+
+ ## Fig S6 - PB303 dose response
+
+plot_PB303 <- df_PB303  %>%
+  ggplot(.) +
+  aes(x = condition, 
+      y = dauer_fraction) +
+  geom_jitter(alpha = .7, size = 0.6) +
+  geom_boxplot(outlier.alpha = 0, alpha = 0.7, fill = "#4DAF4A")+
+  ylim(0,1) +
+  theme_bw() +
+  theme(text = element_text(size=11, color = "black"), axis.title = element_text(size=13, color = "black"), axis.text = element_text(size=11, color = "black"), legend.title = element_text(size=11, color = "black"), legend.text = element_text(size=10, color = "black")) +
+  labs(x="Concentration of ascr#5 (μM)", y="Dauer fraction")
+
+ggsave("~/Dropbox/AndersenLab/LabFolders/Daehan/Manuscripts/srg/Revision/figures/FigS6.png", plot = plot_PB303, width = 4, height = 3, units = "in")
+
+
+ ## Fig S7 - Loss-of-function experiments at 20C and 25C
+
+plot_srg_CRISPR <- df_dauersrg %>%
+  dplyr::filter(condition == 800) %>%
+  ggplot(.) +
+  aes(x = strain, 
+      y = dauer_fraction, fill=strain) +
+  ylim(0, 1)+
+  geom_point(aes(fill=strain), position=position_jitterdodge(), alpha = .7) +
+  geom_boxplot(outlier.alpha = 0, alpha = 0.7)+ 
+  scale_fill_manual(values = c("#377EB8", "#984EA3", "#377EB8", "#984EA3", "#377EB8", "#984EA3", "#377EB8", "#984EA3", "#377EB8", "#984EA3", "#E41A1C", "#984EA3", "#E41A1C", "#984EA3")) +
+  theme_bw() +
+  theme(text = element_text(size=11, color = "black"), axis.title.x = element_blank(), axis.title.y = element_text(size=13, color = "black"), axis.text = element_text(size=11, color = "black"), axis.text.x = element_text(hjust=1, vjust=0.5, angle=90), strip.text = element_text(size=10, color = "black"), legend.position = 'none') +
+  labs(x="Strain", y="Dauer fraction") +
+  facet_wrap(~round, ncol=1)
+
+ggsave("~/Dropbox/AndersenLab/LabFolders/Daehan/Manuscripts/srg/Revision/figures/FigS7.png", plot = plot_srg_CRISPR, width = 7.5, height = 5.5, units = "in")
+
+
+ ###  Fig S8 - Tajima's D for dauf-1 QTL
+
+### Tajima's D
+
+tajimas_d_temp <- function (vcf_path = paste0(path.package("cegwas"), "/"), vcf_name = paste0("WI.", 
+                                                                                              vcf_version, ".impute.vcf.gz"), chromosome = "II", interval_start = 11021073, 
+                            interval_end = 12008179, window_size = 300, slide_distance = 100, 
+                            samples = sort(colnames(snps[, 5:ncol(snps)])), outgroup = "XZ1516", 
+                            site_of_interest = 11875145) 
+{
+  setwd(vcf_path)
+  gen <- PopGenome::readVCF(vcf_name, numcols = 10000, tid = chromosome, 
+                            frompos = interval_start, topos = interval_end, samplenames = samples, 
+                            approx = T)
+  gen1 <- PopGenome::set.populations(gen, list(samples), diploid = TRUE)
+  gen2 <- PopGenome::set.outgroup(gen1, outgroup, diploid = TRUE)
+  s_gen <- PopGenome::sliding.window.transform(gen2, width = window_size, 
+                                               jump = slide_distance, whole.data = FALSE)
+  test <- data.frame(snps = 1:length(as.numeric(colnames(as.data.frame(s_gen@BIG.BIAL[[1]][, 
+                                                                                           ])))), position = as.numeric(colnames(as.data.frame(s_gen@BIG.BIAL[[1]][, 
+                                                                                                                                                                   ]))))
+  slides <- list()
+  for (i in 1:length(s_gen@SLIDE.POS)) {
+    slides[[i]] <- data.frame(window = i, snps = s_gen@SLIDE.POS[[i]])
+  }
+  slides <- dplyr::rbind_all(slides) %>% dplyr::left_join(data.frame(test), 
+                                                          ., by = "snps")
+  s_gen_stats <- PopGenome::neutrality.stats(s_gen)
+  td <- data.frame(window = 1:length(s_gen@SLIDE.POS), Td = s_gen_stats@Tajima.D) %>% 
+    dplyr::left_join(slides, ., by = "window") %>% dplyr::group_by(window) %>% 
+    dplyr::mutate(swindow = min(as.numeric(position)), ewindow = max(as.numeric(position))) %>% 
+    dplyr::mutate(midwindow = (swindow + ewindow)/2) %>% 
+    dplyr::rename(Td = pop.1) %>% dplyr::distinct(Td, window, 
+                                                  .keep_all = T)
+  tajimas_d_plot <- ggplot2::ggplot(td) + ggplot2::geom_point(size = 0.8, alpha = 0.8, aes(x = midwindow/1e+06, y = Td)) + ggplot2::theme_bw() + 
+    ggplot2::theme(axis.text.x = ggplot2::element_text(size = 10, 
+                                                       color = "black"), axis.text.y = ggplot2::element_text(size = 10, 
+                                                                                                                            color = "black"), axis.title.x = ggplot2::element_text(size = 12, 
+                                                                                                                                                                                                  color = "black", vjust = -0.3), axis.title.y = ggplot2::element_text(size = 12, 
+                                                                                                                                                                                                                                                                                      color = "black"), strip.text.x = ggplot2::element_text(size = 10, 
+                                                                                                                                                                                                                                                                                                                                                            color = "black"), strip.text.y = ggplot2::element_text(size = 10, color = "black"), plot.title = ggplot2::element_text(size = 10, color = "black",                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              vjust = 1), legend.position = "none") + ggplot2::labs(x = "Genomic Position (Mb)", 
+                                                                                                                                               y = "Tajima's D")
+  if (!is.null(site_of_interest)) {
+    tajimas_d_plot <- tajimas_d_plot + ggplot2::geom_vline(ggplot2::aes(xintercept = site_of_interest/1e+06), 
+                                                           color = "red", alpha = 0.7, size = 2)
+  }
+  return(list(td, tajimas_d_plot))
+}
+
+### chrX Tajima's D - window size : 50 snps, mean window size in bp = 1477.074, slide_distance = 1 snp
+
+strains <- as.character(unique(df_CeNDR_collection$isotype))
+
+tajimaD_X <- tajimas_d_temp(vcf_path = "~/Dropbox/AndersenLab/LabFolders/Daehan/vcfs/",vcf_name = "fortajimaX_vcfver20180510.vcf.gz", 
+                         chromosome = "X", interval_start = 14200000, interval_end = 14250000, site_of_interest = NULL, slide_distance = 1, window_size = 50, samples = strains)
+
+df_tajima_X <- tajimaD_X[[1]] %>%
+  dplyr::mutate(window_size = ewindow-swindow)
+
+mean(df_tajima_X$window_size) ## 1477.074 bp
+
+plot_tajimaD_X <- tajimaD_X[[2]] + 
+ annotate("rect", xmin = 14229668/1e+06, xmax =14230876/1e+06, ymin = -3.2, ymax = 3.2, alpha = 0.7, fill = "darkorange1") +
+ annotate("rect", xmin = 14233944/1e+06, xmax =14235285/1e+06, ymin = -3.2, ymax = 3.2, alpha = 0.7, fill = "sienna4") +
+ scale_y_continuous(limits = c(-3.2,3.2), expand = c(0, 0)) +
+  theme(plot.margin = margin(b=0.15, l=0.15, r=0.2, t=0.15, unit = "in"))
+
+ggsave("~/Dropbox/AndersenLab/LabFolders/Daehan/Manuscripts/srg/Revision/figures/FigS8.png", plot = plot_tajimaD_X, width = 5, height = 3, units = "in")
+
+
+ ### Fig S9 - Gene expression levels are not significantly different between srg-36 and srg-37
+ 
+FigS9 <- srg3637 %>%
+  ggplot(.) +
+  geom_boxplot(outlier.alpha = 0) +
+  geom_jitter(width = 0.3) +
+  aes(x=gene, y=FPKM) +
+  theme_bw() +
+  theme(axis.text.x = element_text(size=12, color = "black", angle = 0, face = "italic"), axis.title.x = element_blank(), axis.text.y = element_text(size=12, color = "black"), axis.title.y = element_text(size=12, color = "black"))+
+  ylim(-0.01, 1.3)
+  
+ggsave("~/Dropbox/AndersenLab/LabFolders/Daehan/Manuscripts/srg/Revision/figures/FigS9.png", plot = FigS9, width = 4, height = 4, units = "in")
+
+ ### Fig S10 - An alignment of SRG-36 and SRG-37 shows conserved transmembrane receptor structure
+
+ ### Fig S11 - X chromosome sharing of 249 wild strains reveals swept regions where haplotype diversity is reduced
+
+plot_df_X <-
+  df_processed_X_haps %>%
+  dplyr::rename(isotype=haplotype,
+                haplotype=value) %>%
+  dplyr::filter(chromosome == "X") %>%
+  dplyr::group_by(chromosome, isotype) %>%
+  dplyr::arrange(chromosome, isotype, start, stop) %>%
+  # Condense data structure
+  mutate(segment = data.table::rleid(haplotype)) %>%
+  dplyr::group_by(chromosome, isotype, segment) %>%
+  dplyr::mutate(start = min(start), stop = max(stop)) %>%
+  dplyr::distinct() %>%
+  dplyr::mutate(cvalue = as.integer(haplotype),
+                hap_length = stop - start,
+                haplotype=as.character(haplotype)) %>%
+  dplyr::select(chromosome, start, stop, haplotype, isotype, dplyr::everything()) %>%
+  dplyr::left_join(color_plotpoint, by = c("cvalue")) %>%
+  # Filter empty haplotypes
+  dplyr::filter(!is.na(haplotype)) %>%
+  # Determine the swept haplotype based on max(summation of lengths)
+  dplyr::group_by(chromosome, haplotype) %>%
+  dplyr::mutate(chrom_haplotype_sum = sum(hap_length)) %>%
+  dplyr::group_by(chromosome) %>% 
+  dplyr::mutate(swept_haplotype = max(chrom_haplotype_sum) == chrom_haplotype_sum) %>%
+  dplyr::mutate(swept_haplotype_name = ifelse(swept_haplotype, haplotype, NA),
+                swept_haplotype_name = base::Filter(Negate(is.na), unique(swept_haplotype_name)),
+                isotype_has_swept_haplotype = sum(swept_haplotype_name == haplotype) > 0,
+                isotypes_w_haplotype = length(unique(isotype))) %>%
+  # Determine max length of swept haplotype and % shared
+  dplyr::group_by(chromosome, haplotype, isotype) %>%
+  dplyr::mutate(isotype_swept_haplotype_length = sum(ifelse(swept_haplotype, hap_length, 0))) %>%
+  dplyr::group_by(chromosome, isotype) %>%
+  dplyr::mutate(isotype_swept_haplotype_length = max(isotype_swept_haplotype_length)) %>%
+  dplyr::group_by(chromosome) %>%
+  dplyr::mutate(max_swept_haplotype_length = max(isotype_swept_haplotype_length)) %>%
+  dplyr::group_by(chromosome, isotype) %>%
+  dplyr::mutate(max_haplotype_shared = isotype_swept_haplotype_length / max_swept_haplotype_length)
+
+strain_labels <- plot_df_X %>% 
+                    dplyr::ungroup() %>% 
+                    dplyr::select(plotpoint, isotype) %>% 
+                    dplyr::distinct() %>% 
+                    dplyr::arrange(plotpoint)
+
+#========#
+#  Plot  #
+#========#
+
+#=======================#
+# Normal haplotype plot #
+#=======================#
+
+mcolor_grp <- plot_df_X %>% dplyr::select(haplotype, color) %>% dplyr::distinct()
+mcolor <- mcolor_grp$color
+names(mcolor) <- mcolor_grp$haplotype
+
+strain_labels <- plot_df_X %>% dplyr::select(isotype, plotpoint)
+
+FigS11 <- ggplot(plot_df_X,
+       aes(xmin = start/1E6, xmax = stop/1E6,
+           ymin = plotpoint - 0.5, ymax = plotpoint + 0.5,
+           fill = haplotype)) +
+  geom_rect() +
+  scale_fill_manual(values = mcolor) +
+  scale_y_continuous(breaks = strain_labels$plotpoint,
+                     labels = strain_labels$isotype,
+                     expand = c(0, 0)) +
+  scale_x_continuous(expand = c(0, 0)) +
+  xlab("Position (Mb)") +
+  theme_bw() +
+  theme(legend.position="none", axis.text.y = element_blank(), axis.text.x = element_text(size=12, color = "black"), axis.title.x = element_text(size=13, color = "black"), strip.text = element_text(size=12, color = "black"))
+
+ggsave("~/Dropbox/AndersenLab/LabFolders/Daehan/Manuscripts/srg/Revision/figures/FigS11.png", plot = FigS11,  width = 10, height = 10, units = "in")
+
+
+### Supplementary Figure 12 - srg-37 is located far from the left arm of the X chromosome, which is frequently swept across 249 wild C. elegans strains
+
+#==============================#
+# Plot ~ Swept haplotypes only #
+#==============================#
+
+FigS12 <- ggplot(plot_df_X,
+       aes(xmin = start/1E6, xmax = stop/1E6,
+           ymin = plotpoint - 0.5, ymax = plotpoint + 0.5,
+           fill = swept_haplotype)) +
+geom_rect() +
+geom_vline(ggplot2::aes(xintercept = 14229668/1e+06), color = "blue", alpha = 0.7, size = 0.5) + 
+geom_vline(ggplot2::aes(xintercept = 14235285/1e+06), color = "blue", alpha = 0.7, size = 0.5) + 
+scale_fill_manual(values = c("Gray", "#CC0000")) +
+scale_x_continuous(expand = c(0, 0)) +
+scale_y_continuous(breaks = strain_labels$plotpoint,
+                   labels = strain_labels$isotype,
+                   expand = c(0, 0)) +
+xlab("Position (Mb)") +
+theme_bw() +
+  theme(legend.position="none", axis.text.y = element_blank(), axis.text.x = element_text(size=12, color = "black"), axis.title.x = element_text(size=13, color = "black"), strip.text = element_text(size=12, color = "black"))
+
+ggsave("~/Dropbox/AndersenLab/LabFolders/Daehan/Manuscripts/srg/Revision/figures/FigS12.png", plot = FigS12,  width = 10, height = 11, units = "in")
+
+
+### Supplementary Figure 13 - srg-37(ean179) is outcrossed by multiple genotypes
+
+## X swept (>50%) isotypes
+
+df_Xhap_swept <- df_Xhap %>%
+  dplyr::filter(filtered_swept_haplotype == "TRUE", max_haplotype_shared >= 0.5) 
+
+Xswept_strains <- unique(df_Xhap_swept$isotype)
+
+## srg-37(del) outcrossed isotypes
+
+out_strains <- unique(Xswept_strains[!Xswept_strains %in% unique(df_Xhap_NIC2$strain)])  ## over 50% swept, but no srg-37(del)
+
+df_outcross_haps <- plot_df_filtered %>%
+  dplyr::filter(isotype %in% out_strains)
+
+outcross_haps <- unique(df_outcross_haps$haplotype)
+
+ranked_by_sharing_oc <- plot_df_filtered %>%
+  dplyr::filter(isotype %in% out_strains) %>%
+  dplyr::filter(chromosome== "X") %>%
+  dplyr::filter(start<14.3e6 & stop > 14.1e6) %>%
+  dplyr::group_by(isotype, haplotype) %>%
+  dplyr::mutate(locus_hap_length_1 = stop-start) %>%
+  dplyr::mutate(locus_hap_length_2 = stop-14.1e6) %>%
+  dplyr::mutate(locus_hap_length_3 = 14.3e6-start) %>%
+  dplyr::select(start, stop, isotype, haplotype, locus_hap_length_1, locus_hap_length_2, locus_hap_length_3) %>%
+  tidyr::gather(-start, -stop, -isotype, -haplotype, key = "locus_hap_class", value = "length") %>%
+  dplyr::group_by(isotype, haplotype) %>%
+  dplyr::summarise(locus_haplotype_length = min(length)) %>%
+  dplyr::ungroup() %>%
+  dplyr::group_by(isotype) %>%
+  dplyr::mutate(locus_hap_max = ifelse(locus_haplotype_length > 2e5, 2e5, locus_haplotype_length)) %>%
+  dplyr::mutate(locus_max = max(locus_hap_max)) %>%
+  dplyr::filter(locus_max == locus_hap_max) %>%
+  dplyr::ungroup() %>%
+  dplyr::arrange(desc(locus_max), haplotype) %>%
+  dplyr::mutate(plotpoint=row_number()) %>%
+  dplyr::select(isotype, plotpoint) %>%
+  dplyr::arrange(plotpoint)
+
+strain_labels_oc <- ranked_by_sharing_oc$isotype
+
+plot_oc_hap <- plot_df_filtered %>%
+  dplyr::select(-plotpoint) %>%
+  dplyr::filter(chromosome == "X") %>%
+  dplyr::filter(isotype %in% out_strains) %>%
+  dplyr::left_join(ranked_by_sharing_oc) %>%
+  ggplot(.,
+       aes(xmin = start/1E6, xmax = stop/1E6,
+           ymin = plotpoint - 0.5, ymax = plotpoint + 0.5,
+           fill = haplotype)) +
+  geom_rect() +
+  ggplot2::geom_vline(ggplot2::aes(xintercept = 14229668/1e+06), color = "blue", alpha = 0.7, size = 0.5) + 
+  ggplot2::geom_vline(ggplot2::aes(xintercept = 14235285/1e+06), color = "blue", alpha = 0.7, size = 0.5) + 
+  scale_fill_manual(values = mcolor) +
+  scale_y_continuous(breaks = 1:length(strain_labels_oc),
+                     labels = strain_labels_oc,
+                     expand = c(0, 0), position = 'left') +
+  xlab("Position (Mb)") +
+  coord_cartesian(xlim=c(14, 14.5)) +
+  theme_bw() +
+  facet_grid(.~chromosome, scales="free", space="free") +
+   theme(axis.text.x = element_text(size=10, color = "black"), axis.text.y = element_blank(), strip.text = element_text(size=10, color = "black"), legend.position = 'none', axis.title.x = element_text(size=12, color = "black"), plot.margin = margin(b=0.1, l=0.2, r=0.1, t=0.3, unit = "in"))
+
+## sweep filling
+
+## chromosome X sweep filling for srg-37 del strain
+
+plot_del_Xhap_oc_sweep <- plot_df_filtered %>%
+  dplyr::filter(chromosome == "X") %>%
+  dplyr::filter(isotype %in% out_strains) %>%
+  dplyr::select(-plotpoint) %>%
+  dplyr::left_join(ranked_by_sharing_oc) %>%
+  ggplot(.,
+         aes(xmin = start/1E6, xmax = stop/1E6,
+             ymin = plotpoint - 0.5, ymax = plotpoint + 0.5,
+             fill = filtered_swept_haplotype)) +
+  geom_rect() +
+  scale_fill_manual(values = c("TRUE"="#CC0000", "FALSE"="Gray")) +
+  scale_y_continuous(breaks = 1:length(strain_labels_oc),
+                     labels = strain_labels_oc,
+                     expand = c(0, 0), position = 'right') +
+  xlab("Position (Mb)") +
+  theme_bw() +
+  facet_grid(~chromosome) +
+  ggplot2::geom_vline(ggplot2::aes(xintercept = 14229668/1e+06), color = "blue", alpha = 0.7, size = 0.5) + 
+  ggplot2::geom_vline(ggplot2::aes(xintercept = 14235285/1e+06), color = "blue", alpha = 0.7, size = 0.5) + 
+  theme(axis.text.x = element_text(size=10, color = "black"), axis.text.y = element_blank(), strip.text = element_text(size=10, color = "black"), legend.position = 'none', axis.title.x = element_text(size=12, color = "black"), plot.margin = margin(b=0.1, l=0.2, r=0, t=0.3, unit = "in")) +
+  scale_x_continuous(expand = c(0, 0))
+
+## outcross strain map
+
+df_strains_out <- df_CeNDR_collection %>%
+  dplyr::mutate(out = ifelse(isotype %in% out_strains, "YES", "NO"))
+
+nrow(filter(df_strains_out, out == "YES", reference_strain == "True"))/nrow(filter(df_strains_out, reference_strain == "True")) ### outcrossed population 34.1%
+
+isolation_info_out <- df_strains_out %>%
+  dplyr::rename(long = longitude, lat = latitude)%>%
+  dplyr::filter(lat != "None")%>%
+  dplyr::filter(lat != "")%>%
+  dplyr::filter(!is.na(lat)) %>%
+  dplyr::distinct(isotype, long, lat, out)
+
+isolation_info_out$lat <- as.numeric(as.character(isolation_info_out$lat))
+isolation_info_out$long <- as.numeric(as.character(isolation_info_out$long))
+
+plot_out_geo <- ggplot()+ geom_map(data=world, map=world,
+                                aes(x=long, y=lat, map_id=region),
+                                color="black", fill="white", size=0.1)+
+  geom_point(data=dplyr::filter(isolation_info_out, out=="YES"), aes(x=long, y=lat, fill=out), shape =21, size = 2) +
+  scale_fill_manual(values=c("#404040"),name = "Population")+
+  ggsn::scalebar(isolation_info, dist = 2000, dist_unit = "km", location = "bottomleft",
+             transform = TRUE, model = "WGS84", height = 0.02, st.size = 3, st.dist	= 0.03, border.size = 0.3) +
+  theme_map()+
+  theme(text = element_text(size=12), legend.position = 'none', plot.margin = margin(b=0.1, l=0, r=0, t=0, unit = "in"))
+
+FigS13AB <- cowplot::plot_grid(plot_del_Xhap_oc_sweep, plot_oc_hap, labels = c("a","b"), nrow=1, label_size = 15, align = "h")
+FigS13C <- cowplot::plot_grid(plot_out_geo,labels = "c", label_size = 15)
+FigS13 <- cowplot::plot_grid(FigS13AB, FigS13C, nrow=2, label_size = 15, align = "v", rel_heights = c(4,5))
+
+ggsave("~/Dropbox/AndersenLab/LabFolders/Daehan/Manuscripts/srg/Revision/figures/FigS13.png", plot = FigS13,  width = 8, height = 8, units = "in")
+
+
+###  Supplementary Figure 14 - Two srg-37 genotypes are isolated in the local habitat across the world
+
+### geographical distribution
+
+# Geographical allele distribution
+
+isolation_info_colocal <- isolation_info %>%
+  dplyr::filter(strain %in% co_sample) %>%
+  dplyr::distinct(isotype, round(long, 1), round(lat, 1), substrate, srg37, .keep_all = T)
+  
+## plot for co-localized strains world
+
+plot_srg37_map_world_co <- 
+  ggplot()+ geom_map(data=world, map=world,
+                                aes(x=long, y=lat, map_id=region),
+                                color="black", fill="white", size=0.3)+
+  geom_point(data = dplyr::filter(isolation_info_colocal, lat < 35 | long < -10 | long > 25), aes(x=long, y=lat, fill=srg37), shape =21, size = 2, alpha = 0.8) +
+  scale_fill_manual(values=c("grey","red"),name = "Population")+
+  ggsn::scalebar(isolation_info, dist = 2000, dist_unit = "km", location = "bottomleft",
+             transform = TRUE, model = "WGS84", height = 0.03, st.size = 3, st.dist	= 0.05, border.size = 0.3) +
+  theme_map()+
+  geom_label_repel(aes(long, lat, label = substrate, fill = srg37), data = dplyr::filter(isolation_info_colocal, lat < 35 | long < -10 | long > 25), fontface = 'bold', color = 'black', size = 2, box.padding = 0.25, point.padding = 0.3, segment.color = 'black', segment.alpha = 0.4) +
+   theme(text = element_text(size=12), legend.position = 'none', plot.margin = margin(b=0.2, l=0.2, r=0.2, t=0.3, unit = "in"))
+
+## plot for co-localized strains in Europe
+
+plot_srg37_map_Europe_co <- 
+  ggplot()+ geom_map(data=world, map=world,
+                                aes(x=long, y=lat, map_id=region),
+                                color="black", fill="white", size=0.3)+
+  geom_point(data = dplyr::filter(isolation_info_colocal), aes(x=long, y=lat, fill=srg37), shape =21, size = 2, alpha = 0.8) +
+  scale_fill_manual(values=c("grey","red"),name = "Population")+
+  ggsn::scalebar(dplyr::filter(isolation_info_colocal), dist = 300, dist_unit = "km", location = "bottomleft",
+             transform = TRUE, model = "WGS84", height = 0.004, border.size = 0.3, st.size = 3, st.dist	= 0.005, anchor = c(x = 15.6, y = 35.5)) +
+  theme_map()+
+  geom_label_repel(aes(long, lat, label = substrate, fill = srg37), data = isolation_info_colocal, fontface = 'bold', color = 'black', size = 2, box.padding = 0.25, point.padding = 0.3, segment.color = 'black', segment.alpha = 0.4) +
+  theme(text = element_text(size=12), legend.position = 'none', plot.margin = margin(b=0.2, l=0.2, r=0.2, t=0.3, unit = "in")) +
+  lims(x=c(-10, 25), y=c(35, 57))
+
+FigS14 <- cowplot::plot_grid(plot_srg37_map_world_co, plot_srg37_map_Europe_co, labels = c("a","b"), nrow=2, rel_heights = c(2,3), label_size = 15, align = "h")
+
+ggsave("~/Dropbox/AndersenLab/LabFolders/Daehan/Manuscripts/srg/Revision/figures/FigS14.png", plot = FigS14,  width = 7.5, height = 10, units = "in")
+
+
+### Supplementary Figure 15 - High genetic divergence at srg-37 locus is observed between niche-associated subpopulations
+
+Fst_X <- all_subsample_df_summarized %>%
+  dplyr::filter(CHROM == "X") %>%
+  ggplot(.) +
+  geom_smooth(span = 0.2, se = F, method = "loess", size = 0.7) +
+  geom_point(size = 0.1, alpha = 0.1, shape = 21) +
+  aes(x=position/1e6, y=Fst, color = Comparison) +
+  ggplot2::geom_vline(ggplot2::aes(xintercept = 14229668/1e+06), color = "blue", alpha = 0.7, size = 0.5) + 
+  ggplot2::geom_vline(ggplot2::aes(xintercept = 14235285/1e+06), color = "blue", alpha = 0.7, size = 0.5) + 
+  scale_colour_manual(values =c("#1B9E77", "#666666", "#A6761D")) +
+  theme_bw() +
+  labs(x="Position (Mb)", y= "Fst") +
+  theme(axis.text = element_text(size=12, color = "black"), axis.title = element_text(size=13, color = "black"), legend.text = element_text(size=11, color = "black"), legend.title = element_text(size=12, color = "black"))
+
+ggsave("~/Dropbox/AndersenLab/LabFolders/Daehan/Manuscripts/srg/Revision/Figures/FigS15.png", plot = Fst_X, width = 6, height = 3, units = "in")
+
+### Supplementary Figure 16 - Nucleotide diversity (π) across srg-37 locus is low for wild strains with the srg-37 deletion
+
+plot_srg_pi <- df_srg_pi %>%
+  ggplot(.) +
+  geom_line(aes(x=position/1e6, y=Diversity_b), color = "grey", alpha=0.8) +
+  geom_line(aes(x=position/1e6, y=Diversity_a), color = "red", alpha=1) +
+  theme_bw() +
+  labs(x="Position (Mb)", y= "Nucleotide diversity (π)") +
+  ggplot2::geom_vline(ggplot2::aes(xintercept = 14235285/1e+06), color = "blue", alpha = 0.7, size = 0.5) +
+  theme(axis.text = element_text(size=12, color = "black"), axis.title = element_text(size=13, color = "black")) +
+  scale_x_continuous(expand = c(0.001,0.001)) +
+  theme(plot.margin = margin(b=0.2, l=0.2, r=0.2, t=0.2, unit = "in"))
+
+ggsave("~/Dropbox/AndersenLab/LabFolders/Daehan/Manuscripts/srg/Revision/figures/FigS16.png", plot = plot_srg_pi,  width = 6, height = 4, units = "in")
+
+#### Supplementary tables
+
+df_co_sample <- isolation_info_allele %>%
+  dplyr::filter(strain %in% co_sample) %>%
+  dplyr::distinct(isotype, round(long, 1), round(lat, 1), substrate, srg37, .keep_all = T) %>%
+  dplyr::select(strain, isotype, allele = srg37, substrate, latitude = lat, longitude = long, elevation, landscape, isolation_date, source_lab, isolated_by, sampled_by)
+write.csv(df_co_sample, file = "~/Dropbox/AndersenLab/LabFolders/Daehan/Manuscripts/srg/supplementary_table/TableS1_tested.csv")
+
+df_CeNDR <- df_CeNDR_collection %>%
+ dplyr::select(strain, isotype, substrate, latitude, longitude, elevation, landscape, isolation_date, source_lab, isolated_by, sampled_by)
+write.csv(df_CeNDR, file = "~/Dropbox/AndersenLab/LabFolders/Daehan/Manuscripts/srg/supplementary_table/TableS2.csv_tested")
+
+```
+
